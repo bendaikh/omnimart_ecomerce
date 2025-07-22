@@ -697,3 +697,66 @@
             </div>
         </div>
     </div>
+    <!-- Modal Spaceremit -->
+    <div class="modal fade" id="spaceremit" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('Transactions via Spaceremit') }}</h6>
+                    <button class="close" type="button" data-bs-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="card-body">
+                        <form class="interactive-credit-card row" action="{{ route('front.checkout.submit') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="payment_method" value="Spaceremit">
+                            <input type="hidden" name="shipping_id" value="" class="shipping_id_setup">
+                            <input type="hidden" name="state_id" value="{{ auth()->check() && auth()->user()->state_id ? auth()->user()->state_id : '' }}" class="state_id_setup">
+
+                            @php $addr = Session::get('billing_address'); $gtotal = $grand_total ?? Session::get('grand_total_checkout'); @endphp
+                            <input type="hidden" name="amount"   value="{{ $gtotal }}">
+                            <input type="hidden" name="currency" value="{{ PriceHelper::setCurrencyName() }}">
+                            <input type="hidden" name="fullname" value="{{ $addr['bill_first_name'] ?? '' }} {{ $addr['bill_last_name'] ?? '' }}">
+                            <input type="hidden" name="email"    value="{{ $addr['bill_email'] ?? '' }}">
+                            <input type="hidden" name="phone"    value="{{ $addr['bill_phone'] ?? '' }}">
+                            <!-- Spaceremit payment method selectors -->
+                            <div class="sp-one-type-select mb-2">
+                                <input type="radio" name="sp-pay-type-radio" value="local-methods-pay" id="sp_local_methods_radio" checked>
+                                <label for="sp_local_methods_radio"><div>{{ __('Local payment methods') }}</div></label>
+                                <div id="spaceremit-local-methods-pay"></div>
+                            </div>
+                            <div class="sp-one-type-select mb-2">
+                                <input type="radio" name="sp-pay-type-radio" value="card-pay" id="sp_card_radio">
+                                <label for="sp_card_radio"><div>{{ __('Card payment') }}</div></label>
+                                <div id="spaceremit-card-pay"></div>
+                            </div>
+
+                            <p class="p-3">{{ PriceHelper::GatewayText('spaceremit') }}</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary btn-sm" type="button" data-bs-dismiss="modal"><span>{{ __('Cancel') }}</span></button>
+                    <button class="btn btn-primary btn-sm" type="submit"><span>{{ __('Checkout With Spaceremit') }}</span></button>
+                </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@once
+    @php $sp = \App\Models\PaymentSetting::whereUniqueKeyword('spaceremit')->first(); $spk = $sp ? $sp->convertJsonData() : []; @endphp
+    <script src="https://spaceremit.com/api/v2/js_script/spaceremit.js"></script>
+    <script>
+        const SP_PUBLIC_KEY = "{{ $spk['public_key'] ?? '' }}";
+        const SP_FORM_ID = "#spaceremit-form";
+        const SP_SELECT_RADIO_NAME = "sp-pay-type-radio";
+        const LOCAL_METHODS_BOX_STATUS = true;
+        const LOCAL_METHODS_PARENT_ID = "#spaceremit-local-methods-pay";
+        const CARD_BOX_STATUS = true;
+        const CARD_BOX_PARENT_ID = "#spaceremit-card-pay";
+        let SP_FORM_AUTO_SUBMIT_WHEN_GET_CODE = true;
+        function SP_SUCCESSFUL_PAYMENT(c){ console.log('sp success',c); }
+        function SP_FAILD_PAYMENT(){ console.log('sp failed'); }
+        function SP_RECIVED_MESSAGE(m){ console.log(m); }
+        function SP_NEED_AUTH(u){ window.location.href = u; }
+    </script>
+@endonce

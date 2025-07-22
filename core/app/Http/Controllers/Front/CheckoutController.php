@@ -13,6 +13,7 @@ use App\{
     Http\Requests\PaymentRequest,
     Traits\CashOnDeliveryCheckout,
     Traits\BankCheckout,
+    Traits\SpaceremitCheckout,
 };
 use App\Helpers\PriceHelper;
 use App\Helpers\SmsHelper;
@@ -44,6 +45,7 @@ class CheckoutController extends Controller
     use BankCheckout;
     use PaystackCheckout;
     use CashOnDeliveryCheckout;
+    use SpaceremitCheckout;
 
     public function __construct()
     {
@@ -54,6 +56,7 @@ class CheckoutController extends Controller
         $this->middleware('localize');
         $this->__stripeConstruct();
         $this->__paypalConstruct();
+        $this->__spaceremitConstruct();
     }
 
     public function checkoutPage()
@@ -572,6 +575,12 @@ class CheckoutController extends Controller
                 $checkout = true;
                 $payment_redirect = true;
                 $payment = $this->PayTabsSubmit($input);
+                break;
+
+            case 'Spaceremit':
+                $checkout = true;
+                $payment_redirect = false;
+                $payment = $this->spaceremitSubmit($input);
                 break;
 
             case 'Cash On Delivery':
