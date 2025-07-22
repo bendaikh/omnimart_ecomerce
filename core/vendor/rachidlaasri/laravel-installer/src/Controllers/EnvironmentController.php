@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Session;
 use RachidLaasri\LaravelInstaller\Events\EnvironmentSaved;
 use RachidLaasri\LaravelInstaller\Helpers\EnvironmentManager;
 use Validator;
@@ -44,10 +43,6 @@ class EnvironmentController extends Controller
      */
     public function environmentWizard()
     {
-        if (!file_exists('core/vendor/mockery/mockery/verified')) {
-            Session::flash('license_error', 'Please, verify your license first!');
-            return redirect()->route('LaravelInstaller::license');
-        }
         $envConfig = $this->EnvironmentManager->getEnvContent();
 
         return view('vendor.installer.environment-wizard', compact('envConfig'));
@@ -91,10 +86,6 @@ class EnvironmentController extends Controller
      */
     public function saveWizard(Request $request, Redirector $redirect)
     {
-        if (!file_exists('core/vendor/mockery/mockery/verified')) {
-            Session::flash('license_error', 'Please, verify your license first!');
-            return redirect()->route('LaravelInstaller::license');
-        }
         $rules = config('installer.environment.form.rules');
         $messages = [
             'environment_custom.required_if' => trans('installer_messages.environment.wizard.form.name_required'),
@@ -116,31 +107,8 @@ class EnvironmentController extends Controller
 
         event(new EnvironmentSaved($request));
 
-        $db_host = $request->input('database_hostname');
-        $db_user = $request->input('database_username');
-        $db_pass = $request->input('database_password');
-        $db_name = $request->input('database_name');
-        $con = @mysqli_connect($db_host, $db_user, $db_pass, $db_name);
-
-        $templine = '';
-        $lines = file('installer/database.sql');
-        foreach($lines as $line){
-          if(substr($line, 0, 2) == '--' || $line == '')
-            continue;
-          $templine .= $line;
-          $query = false;
-          if(substr(trim($line), -1, 1) == ';'){
-            $query = mysqli_query($con, $templine);
-            $templine = '';
-          }
-        }
-
-
-        copy('core/vendor/league/flysystem/mockery.php', 'core/app/Providers/AppServiceProvider.php');
-        copy('core/vendor/league/flysystem/machie.php', 'core/routes/web.php');
-
-
-        return redirect()->route('LaravelInstaller::final');
+        return $redirect->route('LaravelInstaller::database')
+                        ->with(['results' => $results]);
     }
 
     /**
@@ -152,11 +120,10 @@ class EnvironmentController extends Controller
      */
     private function checkDatabaseConnection(Request $request)
     {
-        
-        $connection = 'mysql';
+        $connection = $request->input('database_connection');
 
         $settings = config("database.connections.$connection");
-        
+
         config([
             'database' => [
                 'default' => $connection,

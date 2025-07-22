@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919
+class ComposerStaticInit39d81c3fcc7a735a6cb71cb3d2eb1f12
 {
     public static $files = array (
         '6e3fae29631ef280660b3cdad06f25a8' => __DIR__ . '/..' . '/symfony/deprecation-contracts/function.php',
@@ -428,8 +428,8 @@ class ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919
         ),
         'Spatie\\LaravelIgnition\\' => 
         array (
-            0 => __DIR__ . '/..' . '/spatie/error-solutions/legacy/laravel-ignition',
-            1 => __DIR__ . '/..' . '/spatie/laravel-ignition/src',
+            0 => __DIR__ . '/..' . '/spatie/laravel-ignition/src',
+            1 => __DIR__ . '/..' . '/spatie/error-solutions/legacy/laravel-ignition',
         ),
         'Spatie\\Image\\' => 
         array (
@@ -441,8 +441,8 @@ class ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919
         ),
         'Spatie\\Ignition\\' => 
         array (
-            0 => __DIR__ . '/..' . '/spatie/error-solutions/legacy/ignition',
-            1 => __DIR__ . '/..' . '/spatie/ignition/src',
+            0 => __DIR__ . '/..' . '/spatie/ignition/src',
+            1 => __DIR__ . '/..' . '/spatie/error-solutions/legacy/ignition',
         ),
         'Spatie\\FlareClient\\' => 
         array (
@@ -661,8 +661,8 @@ class ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919
         ),
         'Http\\Message\\' => 
         array (
-            0 => __DIR__ . '/..' . '/php-http/message/src',
-            1 => __DIR__ . '/..' . '/php-http/message-factory/src',
+            0 => __DIR__ . '/..' . '/php-http/message-factory/src',
+            1 => __DIR__ . '/..' . '/php-http/message/src',
         ),
         'Http\\Discovery\\' => 
         array (
@@ -6241,7 +6241,6 @@ class ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919
         'RachidLaasri\\LaravelInstaller\\Controllers\\DatabaseController' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Controllers/DatabaseController.php',
         'RachidLaasri\\LaravelInstaller\\Controllers\\EnvironmentController' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Controllers/EnvironmentController.php',
         'RachidLaasri\\LaravelInstaller\\Controllers\\FinalController' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Controllers/FinalController.php',
-        'RachidLaasri\\LaravelInstaller\\Controllers\\LicenseController' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Controllers/LicenseController.php',
         'RachidLaasri\\LaravelInstaller\\Controllers\\PermissionsController' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Controllers/PermissionsController.php',
         'RachidLaasri\\LaravelInstaller\\Controllers\\RequirementsController' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Controllers/RequirementsController.php',
         'RachidLaasri\\LaravelInstaller\\Controllers\\UpdateController' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Controllers/UpdateController.php',
@@ -11409,9 +11408,9 @@ class ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInitdeaf4d34a5b12b6ee1fe45d9d2ef8919::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit39d81c3fcc7a735a6cb71cb3d2eb1f12::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit39d81c3fcc7a735a6cb71cb3d2eb1f12::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit39d81c3fcc7a735a6cb71cb3d2eb1f12::$classMap;
 
         }, null, ClassLoader::class);
     }
