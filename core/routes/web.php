@@ -451,6 +451,10 @@ Route::group(['middleware' => 'maintainance'], function () {
         Route::post('/paytab/submit', 'Payment\PaytabsCheckout@store')->name('front.paytab.submit');
         Route::post('/paytab/callback', 'Payment\PaytabsCheckout@paytabCallback')->name('paytab.callback');
         
+        // Spaceremit Payment
+        Route::post('/spaceremit/submit', 'Front\CheckoutController@spaceremitSubmit')->name('front.spaceremit.submit');
+        Route::post('/payment/spaceremit/callback', 'Front\CheckoutController@spaceremitCallback')->name('spaceremit.callback');
+        
         // ----------- TRACK ORDER ----------//
         Route::get('/track/order', 'Front\FrontendController@trackOrder')->name('front.order.track');
         Route::get('/order/track/submit', 'Front\FrontendController@track')->name('front.order.track.submit');

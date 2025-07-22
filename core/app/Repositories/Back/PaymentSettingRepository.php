@@ -65,7 +65,25 @@ class PaymentSettingRepository
         
         $data['paytabsData'] = $paytabs->convertJsonData();
         $data['paytabs'] = $paytabs;
-     
+ 
+        // Spaceremit
+        $spaceremit = PaymentSetting::firstOrCreate(
+            [
+                'unique_keyword' => 'spaceremit'
+            ],
+            [
+                'name' => 'Spaceremit',
+                'information' => json_encode([
+                    'public_key' => '',
+                    'secret_key' => ''
+                ]),
+                'status' => 0
+            ]
+        );
+
+        $data['spaceremitData'] = $spaceremit->convertJsonData();
+        $data['spaceremit'] = $spaceremit;
+
         $cod = PaymentSetting::whereUniqueKeyword('cod')->first();
         $data['cod'] = $cod;
 
