@@ -704,6 +704,13 @@
                             <input type="hidden" name="payment_method" value="Spaceremit">
                             <input type="hidden" name="shipping_id" value="" class="shipping_id_setup">
                             <input type="hidden" name="state_id" value="{{ auth()->check() && auth()->user()->state_id ? auth()->user()->state_id : '' }}" class="state_id_setup">
+                            @php $addr = Session::get('billing_address'); $gtotal = $grand_total ?? Session::get('grand_total_checkout'); @endphp
+                            <input type="hidden" name="amount"   value="{{ $gtotal }}">
+                            <input type="hidden" name="currency" value="{{ PriceHelper::setCurrencyName() }}">
+                            <input type="hidden" name="fullname" value="{{ $addr['bill_first_name'] ?? '' }} {{ $addr['bill_last_name'] ?? '' }}">
+                            <input type="hidden" name="email"    value="{{ $addr['bill_email'] ?? '' }}">
+                            <input type="hidden" name="phone"    value="{{ $addr['bill_phone'] ?? '' }}">
+
                             <div class="sp-one-type-select mb-2">
                                 <input type="radio" name="sp-pay-type-radio" value="local-methods-pay" id="sp_local_methods_radio" checked>
                                 <label for="sp_local_methods_radio"><div>{{ __('Local payment methods') }}</div></label>
