@@ -699,7 +699,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="card-body">
-                        <form class="interactive-credit-card row" action="{{ route('front.checkout.submit') }}" method="POST">
+                        <form id="spaceremit-form" class="interactive-credit-card row" action="{{ route('front.checkout.submit') }}" method="POST">
                             @csrf
                             <input type="hidden" name="payment_method" value="Spaceremit">
                             <input type="hidden" name="shipping_id" value="" class="shipping_id_setup">
