@@ -729,20 +729,20 @@
 
     @once
         @php $sp = \App\Models\PaymentSetting::whereUniqueKeyword('spaceremit')->first(); $spk = $sp ? $sp->convertJsonData() : []; @endphp
-        <script src="https://spaceremit.com/api/v2/js_script/spaceremit.js"></script>
         <script>
-            const SP_PUBLIC_KEY = "{{ $spk['public_key'] ?? '' }}";
-            const SP_FORM_ID = "#spaceremit-form";
-            const SP_SELECT_RADIO_NAME = "sp-pay-type-radio";
-            const LOCAL_METHODS_BOX_STATUS = true;
-            const LOCAL_METHODS_PARENT_ID = "#spaceremit-local-methods-pay";
-            const CARD_BOX_STATUS = true;
-            const CARD_BOX_PARENT_ID = "#spaceremit-card-pay";
-            let SP_FORM_AUTO_SUBMIT_WHEN_GET_CODE = true;
+            var SP_PUBLIC_KEY = "{{ $spk['public_key'] ?? '' }}";
+            var SP_FORM_ID = "#spaceremit-form";
+            var SP_SELECT_RADIO_NAME = "sp-pay-type-radio";
+            var LOCAL_METHODS_BOX_STATUS = true;
+            var LOCAL_METHODS_PARENT_ID = "#spaceremit-local-methods-pay";
+            var CARD_BOX_STATUS = true;
+            var CARD_BOX_PARENT_ID = "#spaceremit-card-pay";
+            var SP_FORM_AUTO_SUBMIT_WHEN_GET_CODE = true;
             function SP_SUCCESSFUL_PAYMENT(c){ console.log('sp success',c); }
             function SP_FAILD_PAYMENT(){ console.log('sp failed'); }
             function SP_RECIVED_MESSAGE(m){ console.log(m); }
             function SP_NEED_AUTH(u){ window.location.href = u; }
         </script>
+        <script src="https://spaceremit.com/api/v2/js_script/spaceremit.js"></script>
     @endonce
 
