@@ -32,7 +32,7 @@
                 <div class="card o-hidden border-0 shadow-lg">
                     <div class="card-body ">
                         <!-- Nested Row within Card Body -->
-                        <form class="admin-form" action="{{ route('back.setting.update') }}" method="POST"
+                        <form class="admin-form" action="{{ route('back.setting.system.update') }}" method="POST"
                             enctype="multipart/form-data">
 
                             @csrf
