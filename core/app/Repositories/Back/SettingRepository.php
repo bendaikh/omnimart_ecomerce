@@ -45,7 +45,11 @@ class SettingRepository
         $wafSensitiveFields = ['google_analytics', 'google_adsense', 'facebook_pixel', 'custom_css'];
         foreach ($wafSensitiveFields as $field) {
             if (isset($input[$field])) {
-                $input[$field] = base64_encode($input[$field]);
+                $raw = $input[$field];
+                // If it’s not already valid base64, encode it.
+                if (base64_decode($raw, true) === false) {
+                    $input[$field] = base64_encode($raw);
+                }
             }
         }
 
