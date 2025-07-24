@@ -135,5 +135,44 @@ class Setting extends Model
 
     public $timestamps = false;
 
+    /*
+    |--------------------------------------------------------------------------
+    | Accessors & Mutators for WAF-sensitive fields
+    |--------------------------------------------------------------------------
+    | We store these four fields base64-encoded (to stop ModSecurity/WAF rules
+    | from blocking requests that contain <script> tags). The accessors decode
+    | on read so the rest of the application works unchanged. If a future
+    | migration stores the value in plain text, we detect that and return it
+    | as-is so nothing breaks.
+    */
+
+    protected $base64Fields = [
+        'google_analytics',
+        'google_adsense',
+        'facebook_pixel',
+        'custom_css',
+    ];
+
+    public function __get($key)
+    {
+        $value = parent::__get($key);
+
+        if (in_array($key, $this->base64Fields)) {
+            // Try to decode; if it isn’t valid base64 we just return the raw value
+            $decoded = base64_decode($value, true);
+            return $decoded !== false ? $decoded : $value;
+        }
+
+        return $value;
+    }
+
+    public function __set($key, $value)
+    {
+        if (in_array($key, $this->base64Fields)) {
+            $value = base64_encode($value);
+        }
+
+        parent::__set($key, $value);
+    }
 
 }

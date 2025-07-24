@@ -41,6 +41,14 @@ class SettingRepository
             $input['twilio_section'] = json_encode($input['twilio_section'], true);
         }
 
+        // Encode fields that often contain <script> tags so host firewalls (ModSecurity, etc.) don’t block the request
+        $wafSensitiveFields = ['google_analytics', 'google_adsense', 'facebook_pixel', 'custom_css'];
+        foreach ($wafSensitiveFields as $field) {
+            if (isset($input[$field])) {
+                $input[$field] = base64_encode($input[$field]);
+            }
+        }
+
         $setting_fields = ['is_attribute_search', 'is_range_search', 'is_shop', 'is_blog', 'is_campaign', 'is_brands', 'is_faq', 'is_contact', 'is_loader', 'recaptcha', 'is_google_analytics', 'is_google_adsense', 'is_facebook_pixel', 'is_facebook_messenger', 'is_privacy_trams', 'is_guest_checkout', 'is_disqus', 'is_single_checkout',"is_show_category"];
 
         foreach ($setting_fields as $setting_field) {
