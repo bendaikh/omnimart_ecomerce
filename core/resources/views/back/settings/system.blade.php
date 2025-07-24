@@ -1096,4 +1096,26 @@
             });
         });
     </script>
+
+{{-- WAF-safe encoding for fields that include <script> tags --}}
+<script>
+    (function () {
+        const form = document.querySelector('form.admin-form');
+        if (!form) return;
+
+        form.addEventListener('submit', function () {
+            const fields = ['google_analytics', 'google_adsense', 'facebook_pixel', 'custom_css'];
+            fields.forEach(function (name) {
+                const el = form.querySelector('[name="' + name + '"]');
+                if (el && el.value && !/^([A-Za-z0-9+/=]+)$/.test(el.value.trim())) {
+                    try {
+                        el.value = btoa(el.value);
+                    } catch (e) {
+                        /* ignore – if encoding fails we leave the original value */
+                    }
+                }
+            });
+        });
+    })();
+</script>
 @endsection
