@@ -69,12 +69,14 @@ class FrontendController extends Controller
 
         // feature category
         $feature_category_ids = json_decode($home_customize->feature_category, true);
-        $feature_category_title = $feature_category_ids['feature_title'];
+        $feature_category_title = $feature_category_ids ? $feature_category_ids['feature_title'] : '';
         $feature_category = [];
-        for ($i = 1; $i <= 4; $i++) {
-            if (!in_array($feature_category_ids['category_id' . $i], $feature_category)) {
-                if ($feature_category_ids['category_id' . $i]) {
-                    $feature_category[] = $feature_category_ids['category_id' . $i];
+        if ($feature_category_ids && is_array($feature_category_ids)) {
+            for ($i = 1; $i <= 4; $i++) {
+                if (isset($feature_category_ids['category_id' . $i]) && !in_array($feature_category_ids['category_id' . $i], $feature_category)) {
+                    if ($feature_category_ids['category_id' . $i]) {
+                        $feature_category[] = $feature_category_ids['category_id' . $i];
+                    }
                 }
             }
         }
@@ -88,14 +90,14 @@ class FrontendController extends Controller
         if (count($feature_categories)) {
             $index = '';
             foreach ($feature_categories as $key => $data) {
-                if ($data->id == $feature_category_ids['category_id1']) {
+                if ($feature_category_ids && isset($feature_category_ids['category_id1']) && $data->id == $feature_category_ids['category_id1']) {
                     $index = $key;
                 }
             }
 
             $category = $feature_categories[$index]->id;
-            $subcategory = $feature_category_ids['subcategory_id1'];
-            $childcategory = $feature_category_ids['childcategory_id1'];
+            $subcategory = $feature_category_ids && isset($feature_category_ids['subcategory_id1']) ? $feature_category_ids['subcategory_id1'] : null;
+            $childcategory = $feature_category_ids && isset($feature_category_ids['childcategory_id1']) ? $feature_category_ids['childcategory_id1'] : null;
 
             $feature_category_items = Item::when($category, function ($query, $category) {
                 return $query->where('category_id', $category);
@@ -115,13 +117,15 @@ class FrontendController extends Controller
         // popular category
 
         $popular_category_ids = json_decode($home_customize->popular_category, true);
-        $popular_category_title = $popular_category_ids['popular_title'];
+        $popular_category_title = $popular_category_ids ? $popular_category_ids['popular_title'] : '';
 
         $popular_category = [];
-        for ($i = 1; $i <= 4; $i++) {
-            if (!in_array($popular_category_ids['category_id' . $i], $popular_category)) {
-                if ($popular_category_ids['category_id' . $i]) {
-                    $popular_category[] = $popular_category_ids['category_id' . $i];
+        if ($popular_category_ids && is_array($popular_category_ids)) {
+            for ($i = 1; $i <= 4; $i++) {
+                if (isset($popular_category_ids['category_id' . $i]) && !in_array($popular_category_ids['category_id' . $i], $popular_category)) {
+                    if ($popular_category_ids['category_id' . $i]) {
+                        $popular_category[] = $popular_category_ids['category_id' . $i];
+                    }
                 }
             }
         }
@@ -135,7 +139,7 @@ class FrontendController extends Controller
         if (count($popular_categories) > 0) {
             $index = '';
             foreach ($popular_categories as $key => $data) {
-                if ($data->id == $popular_category_ids['category_id1']) {
+                if ($popular_category_ids && isset($popular_category_ids['category_id1']) && $data->id == $popular_category_ids['category_id1']) {
                     $index = $key;
                 }
             }
@@ -143,15 +147,17 @@ class FrontendController extends Controller
             if ($setting->theme == 'theme4') {
                 $pupular_cateogries_home4 = json_decode($home_customize->home_4_popular_category, true);
                 $pupular_cateogry_home4 = [];
-                foreach ($pupular_cateogries_home4 as $home4category) {
-                    $pupular_cateogry_home4[] = Category::with('items')->findOrFail($home4category);
+                if ($pupular_cateogries_home4 && is_array($pupular_cateogries_home4)) {
+                    foreach ($pupular_cateogries_home4 as $home4category) {
+                        $pupular_cateogry_home4[] = Category::with('items')->findOrFail($home4category);
+                    }
                 }
             }
 
             // dd($pupular_cateogry_home4);
             $category = $popular_categories[$index]->id;
-            $subcategory = $popular_category_ids['subcategory_id1'];
-            $childcategory = $popular_category_ids['childcategory_id1'];
+            $subcategory = $popular_category_ids && isset($popular_category_ids['subcategory_id1']) ? $popular_category_ids['subcategory_id1'] : null;
+            $childcategory = $popular_category_ids && isset($popular_category_ids['childcategory_id1']) ? $popular_category_ids['childcategory_id1'] : null;
 
             $popular_category_items = Item::when($category, function ($query, $category) {
                 return $query->where('category_id', $category);
@@ -170,10 +176,12 @@ class FrontendController extends Controller
         $two_column_category_ids = json_decode($home_customize->two_column_category, true);
 
         $two_column_category = [];
-        for ($i = 1; $i <= 3; $i++) {
-            if (isset($two_column_category_ids['category_id' . $i]) && !in_array($two_column_category_ids['category_id' . $i], $two_column_category)) {
-                if ($two_column_category_ids['category_id' . $i]) {
-                    $two_column_category[] = $two_column_category_ids['category_id' . $i];
+        if ($two_column_category_ids && is_array($two_column_category_ids)) {
+            for ($i = 1; $i <= 3; $i++) {
+                if (isset($two_column_category_ids['category_id' . $i]) && !in_array($two_column_category_ids['category_id' . $i], $two_column_category)) {
+                    if ($two_column_category_ids['category_id' . $i]) {
+                        $two_column_category[] = $two_column_category_ids['category_id' . $i];
+                    }
                 }
             }
         }
@@ -181,36 +189,36 @@ class FrontendController extends Controller
         $two_column_categories = Category::whereStatus(1)->whereIn('id', $two_column_category)->orderby('id', 'desc')->get();
 
         $two_column_category_items1 = [];
-        if ($two_column_category_ids['category_id1']) {
+        if ($two_column_category_ids && isset($two_column_category_ids['category_id1']) && $two_column_category_ids['category_id1']) {
             $two_column_category_items1 = Item::where('category_id', $two_column_category_ids['category_id1'])->orderby('id', 'desc')->whereStatus(1)->take(10)->get();
         }
-        if ($two_column_category_ids['subcategory_id1']) {
+        if ($two_column_category_ids && isset($two_column_category_ids['subcategory_id1']) && $two_column_category_ids['subcategory_id1']) {
             $two_column_category_items1 = Item::where('subcategory_id', $two_column_category_ids['subcategory_id1'])->whereStatus(1)->where('category_id', $two_column_category_ids['category_id1'])->orderby('id', 'desc')->take(10)->get();
         }
-        if ($two_column_category_ids['childcategory_id1']) {
+        if ($two_column_category_ids && isset($two_column_category_ids['childcategory_id1']) && $two_column_category_ids['childcategory_id1']) {
             $two_column_category_items1 = Item::where('childcategory_id', $two_column_category_ids['childcategory_id1'])->whereStatus(1)->where('category_id', $two_column_category_ids['category_id1'])->orderby('id', 'desc')->take(10)->get();
         }
 
         $two_column_category_items2 = [];
-        if ($two_column_category_ids['category_id2']) {
+        if ($two_column_category_ids && isset($two_column_category_ids['category_id2']) && $two_column_category_ids['category_id2']) {
             $two_column_category_items2 = Item::where('category_id', $two_column_category_ids['category_id2'])->orderby('id', 'desc')->whereStatus(1)->take(10)->get();
         }
-        if ($two_column_category_ids['subcategory_id2']) {
+        if ($two_column_category_ids && isset($two_column_category_ids['subcategory_id2']) && $two_column_category_ids['subcategory_id2']) {
             $two_column_category_items2 = Item::where('subcategory_id', $two_column_category_ids['subcategory_id2'])->whereStatus(1)->where('category_id', $two_column_category_ids['category_id2'])->orderby('id', 'desc')->take(10)->get();
         }
-        if ($two_column_category_ids['childcategory_id2']) {
+        if ($two_column_category_ids && isset($two_column_category_ids['childcategory_id2']) && $two_column_category_ids['childcategory_id2']) {
             $two_column_category_items2 = Item::where('childcategory_id', $two_column_category_ids['childcategory_id2'])->whereStatus(1)->where('category_id', $two_column_category_ids['category_id2'])->orderby('id', 'desc')->take(10)->get();
         }
 
         $two_column_category_items3 = [];
-        if (isset($two_column_category_ids['category_id3'])) {
+        if ($two_column_category_ids && isset($two_column_category_ids['category_id3'])) {
             if ($two_column_category_ids['category_id3']) {
                 $two_column_category_items3 = Item::where('category_id', $two_column_category_ids['category_id3'])->orderby('id', 'desc')->whereStatus(1)->take(10)->get();
             }
-            if ($two_column_category_ids['subcategory_id3']) {
+            if (isset($two_column_category_ids['subcategory_id3']) && $two_column_category_ids['subcategory_id3']) {
                 $two_column_category_items3 = Item::where('subcategory_id', $two_column_category_ids['subcategory_id3'])->whereStatus(1)->where('category_id', $two_column_category_ids['category_id3'])->orderby('id', 'desc')->take(10)->get();
             }
-            if ($two_column_category_ids['childcategory_id3']) {
+            if (isset($two_column_category_ids['childcategory_id3']) && $two_column_category_ids['childcategory_id3']) {
                 $two_column_category_items3 = Item::where('childcategory_id', $two_column_category_ids['childcategory_id3'])->whereStatus(1)->where('category_id', $two_column_category_ids['category_id3'])->orderby('id', 'desc')->take(10)->get();
             }
         }
