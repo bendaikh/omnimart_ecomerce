@@ -208,52 +208,85 @@ trait DodoPaymentsCheckout
             try {
                 \Log::info('DodoPayments: Testing direct HTTP API call');
                 
-                // Prepare payload according to DodoPayments API documentation
-                $payload = [
-                    'billing' => $billing,
-                    'customer' => $customer,
-                    'product_cart' => $productCart,
-                    'metadata' => $metadata,
-                    'return_url' => $returnURL,
-                    'webhook_url' => route('front.checkout.dodopayments.webhook')
+                // Try multiple endpoints based on documentation
+                $endpoints = [
+                    $baseUrl . '/api/v1/payment',
+                    $baseUrl . '/api/v1/payments', 
+                    $baseUrl . '/api/v1/checkout-session'
                 ];
                 
-                \Log::info('DodoPayments: Direct HTTP payload', [
-                    'payload' => $payload,
-                    'endpoint' => $baseUrl . '/api/v1/payments'
-                ]);
+                $response = null;
+                $usedEndpoint = null;
                 
-                $response = \Http::timeout(30)
-                    ->withHeaders([
-                        'Authorization' => 'Bearer ' . $apiKey,
-                        'Content-Type' => 'application/json',
-                        'Accept' => 'application/json'
-                    ])
-                    ->post($baseUrl . '/api/v1/payments', $payload);
-                
-                \Log::info('DodoPayments: Direct HTTP API call completed', [
-                    'status' => $response->status(),
-                    'response_body' => $response->body(),
-                    'response_size' => strlen($response->body())
-                ]);
-                
-                if ($response->successful()) {
-                    $responseData = $response->json();
-                    $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? null;
-                    
-                    if ($paymentId) {
-                        \Log::info('DodoPayments: Direct API call successful', [
-                            'payment_id' => $paymentId
+                foreach ($endpoints as $endpoint) {
+                    try {
+                        \Log::info('DodoPayments: Trying endpoint', ['endpoint' => $endpoint]);
+                        
+                        $payload = [
+                            'billing' => $billing,
+                            'customer' => $customer,
+                            'product_cart' => $productCart,
+                            'metadata' => $metadata,
+                            'return_url' => $returnURL,
+                            'webhook_url' => route('front.checkout.dodopayments.webhook')
+                        ];
+                        
+                        $response = \Http::timeout(30)
+                            ->withHeaders([
+                                'Authorization' => 'Bearer ' . $apiKey,
+                                'Content-Type' => 'application/json',
+                                'Accept' => 'application/json'
+                            ])
+                            ->post($endpoint, $payload);
+                        
+                        \Log::info('DodoPayments: Endpoint response', [
+                            'endpoint' => $endpoint,
+                            'status' => $response->status(),
+                            'response_size' => strlen($response->body())
                         ]);
                         
-                        // Return success with payment ID for overlay checkout
-                        return [
-                            'status' => true,
-                            'payment_id' => $paymentId,
-                            'overlay_checkout' => true,
-                            'api_key' => $apiKey
-                        ];
+                        if ($response->status() !== 404) {
+                            $usedEndpoint = $endpoint;
+                            break;
+                        }
+                        
+                    } catch (\Exception $e) {
+                        \Log::warning('DodoPayments: Endpoint failed', [
+                            'endpoint' => $endpoint,
+                            'error' => $e->getMessage()
+                        ]);
                     }
+                }
+                
+                if ($response && $usedEndpoint) {
+                    \Log::info('DodoPayments: Direct HTTP API call completed', [
+                        'used_endpoint' => $usedEndpoint,
+                        'status' => $response->status(),
+                        'response_body' => $response->body(),
+                        'response_size' => strlen($response->body())
+                    ]);
+                    
+                    if ($response->successful()) {
+                        $responseData = $response->json();
+                        $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? $responseData['checkout_session_id'] ?? null;
+                        
+                        if ($paymentId) {
+                            \Log::info('DodoPayments: Direct API call successful', [
+                                'payment_id' => $paymentId,
+                                'used_endpoint' => $usedEndpoint
+                            ]);
+                            
+                            // Return success with payment ID for overlay checkout
+                            return [
+                                'status' => true,
+                                'payment_id' => $paymentId,
+                                'overlay_checkout' => true,
+                                'api_key' => $apiKey
+                            ];
+                        }
+                    }
+                } else {
+                    \Log::warning('DodoPayments: No working endpoint found');
                 }
                 
                 // If direct HTTP doesn't work, fall back to SDK
