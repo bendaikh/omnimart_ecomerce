@@ -95,7 +95,18 @@ trait DodoPaymentsCheckout
         $orderData['order_status'] = 'Pending';
 
         try {
-            $apiKey = Config::get('services.dodopayments.api_key');
+            // Get DodoPayments settings from database
+            $dodoSettings = \App\Models\PaymentSetting::whereUniqueKeyword('dodopayments')->first();
+            if (!$dodoSettings) {
+                throw new \Exception('DodoPayments settings not found');
+            }
+            
+            $dodoData = $dodoSettings->convertJsonData();
+            $apiKey = $dodoData['api_key'] ?? null;
+            
+            if (empty($apiKey)) {
+                throw new \Exception('DodoPayments API key is not configured');
+            }
             
             // Prepare billing address
             $billingAddress = Session::get('billing_address');
@@ -162,6 +173,8 @@ trait DodoPaymentsCheckout
             
             \Log::info('DodoPayments: About to create payment', [
                 'api_key_length' => strlen($apiKey),
+                'api_key_prefix' => substr($apiKey, 0, 10) . '...',
+                'settings_found' => $dodoSettings ? 'yes' : 'no',
                 'billing' => $billing,
                 'customer' => $customer,
                 'product_cart' => $productCart,
