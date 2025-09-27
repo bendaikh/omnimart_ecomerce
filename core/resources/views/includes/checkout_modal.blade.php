@@ -742,6 +742,40 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal DodoPayments -->
+    <div class="modal fade" id="dodopayments" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('Transactions via DodoPayments') }}</h6>
+                    <button class="close" type="button" data-bs-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="card-body">
+                        <form action="{{ route('front.checkout.submit') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="payment_method" value="DodoPayments">
+                            <input type="hidden" name="shipping_id" value="" class="shipping_id_setup">
+                            <input type="hidden" name="state_id" value="{{ auth()->check() && auth()->user()->state_id ? auth()->user()->state_id : '' }}" class="state_id_setup">
+                            
+                            <p>{{ PriceHelper::GatewayText('dodopayments') }}</p>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                {{ __('You will be redirected to DodoPayments secure payment page to complete your transaction.') }}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary btn-sm" type="button" data-bs-dismiss="modal"><span>{{ __('Cancel') }}</span></button>
+                    <button class="btn btn-primary btn-sm" type="submit" onclick="document.querySelector('#dodopayments form').submit();"><span>{{ __('Pay with DodoPayments') }}</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         var SP_PUBLIC_KEY = "{{ $spk['public_key'] ?? '' }}";
         var SP_FORM_ID = "#spaceremit-form";

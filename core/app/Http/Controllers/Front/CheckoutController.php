@@ -591,6 +591,10 @@ class CheckoutController extends Controller
                 break;
 
             case 'DodoPayments':
+                if (!in_array($currency->name, ['USD'])) {
+                    Session::flash('error', __('Currency Not Supported'));
+                    return redirect()->back();
+                }
                 $checkout = true;
                 $payment_redirect = true;
                 $payment = $this->dodoPaymentsSubmit($input);
