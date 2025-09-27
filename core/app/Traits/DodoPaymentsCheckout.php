@@ -183,7 +183,7 @@ trait DodoPaymentsCheckout
             ];
             
             $customer = [
-                'customer_id' => isset($user) ? $user->id : 'guest_' . time(),
+                'customer_id' => isset($user) ? (string) $user->id : 'guest_' . time(),
                 'email' => $shippingAddress['ship_email'] ?? $billingAddress['bill_email'] ?? '',
                 'name' => ($shippingAddress['ship_first_name'] ?? '') . ' ' . ($shippingAddress['ship_last_name'] ?? '')
             ];
@@ -191,7 +191,7 @@ trait DodoPaymentsCheckout
             $productCart = [
                 [
                     'product_id' => $orderData['transaction_number'],
-                    'quantity' => 1,
+                    'quantity' => '1',  // Convert to string
                     'name' => $setting->title . ' Order',
                     'price' => $total_amount,
                     'currency' => 'USD'
@@ -200,7 +200,7 @@ trait DodoPaymentsCheckout
             
             $metadata = [
                 'order_id' => $orderData['transaction_number'],
-                'user_id' => $orderData['user_id']
+                'user_id' => (string) $orderData['user_id']  // Convert to string as required by API
             ];
             
             $returnURL = route('front.checkout.redirect');
