@@ -137,17 +137,23 @@ trait DodoPaymentsCheckout
             $client = new Client($apiKey);
             \Log::info('DodoPayments: Client initialized successfully');
             
+            // Determine if we should use test or live mode based on API key
+            $baseUrl = str_starts_with($apiKey, 'test_') ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
+            \Log::info('DodoPayments: Using base URL', ['base_url' => $baseUrl]);
+            
             // Test basic connectivity to DodoPayments API
             try {
                 \Log::info('DodoPayments: Testing API connectivity');
-                $testResponse = \Http::timeout(10)->get('https://live.dodopayments.com/api/v1/health');
+                $testResponse = \Http::timeout(10)->get($baseUrl . '/api/v1/health');
                 \Log::info('DodoPayments: API connectivity test completed', [
                     'status' => $testResponse->status(),
-                    'response_length' => strlen($testResponse->body())
+                    'response_length' => strlen($testResponse->body()),
+                    'url' => $baseUrl . '/api/v1/health'
                 ]);
             } catch (\Exception $e) {
                 \Log::warning('DodoPayments: API connectivity test failed', [
-                    'message' => $e->getMessage()
+                    'message' => $e->getMessage(),
+                    'url' => $baseUrl . '/api/v1/health'
                 ]);
             }
             
@@ -198,9 +204,70 @@ trait DodoPaymentsCheckout
                 'timeout' => $requestOptions->timeout
             ]);
             
+            // Try direct HTTP call first to test the API
+            try {
+                \Log::info('DodoPayments: Testing direct HTTP API call');
+                
+                // Prepare payload according to DodoPayments API documentation
+                $payload = [
+                    'billing' => $billing,
+                    'customer' => $customer,
+                    'product_cart' => $productCart,
+                    'metadata' => $metadata,
+                    'return_url' => $returnURL,
+                    'webhook_url' => route('front.checkout.dodopayments.webhook')
+                ];
+                
+                \Log::info('DodoPayments: Direct HTTP payload', [
+                    'payload' => $payload,
+                    'endpoint' => $baseUrl . '/api/v1/payments'
+                ]);
+                
+                $response = \Http::timeout(30)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type' => 'application/json',
+                        'Accept' => 'application/json'
+                    ])
+                    ->post($baseUrl . '/api/v1/payments', $payload);
+                
+                \Log::info('DodoPayments: Direct HTTP API call completed', [
+                    'status' => $response->status(),
+                    'response_body' => $response->body(),
+                    'response_size' => strlen($response->body())
+                ]);
+                
+                if ($response->successful()) {
+                    $responseData = $response->json();
+                    $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? null;
+                    
+                    if ($paymentId) {
+                        \Log::info('DodoPayments: Direct API call successful', [
+                            'payment_id' => $paymentId
+                        ]);
+                        
+                        // Return success with payment ID for overlay checkout
+                        return [
+                            'status' => true,
+                            'payment_id' => $paymentId,
+                            'overlay_checkout' => true,
+                            'api_key' => $apiKey
+                        ];
+                    }
+                }
+                
+                // If direct HTTP doesn't work, fall back to SDK
+                \Log::info('DodoPayments: Falling back to SDK method');
+                
+            } catch (\Exception $e) {
+                \Log::warning('DodoPayments: Direct HTTP call failed, trying SDK', [
+                    'message' => $e->getMessage()
+                ]);
+            }
+            
             // Create payment using the official SDK with correct parameters
             try {
-                \Log::info('DodoPayments: Calling payments->create()');
+                \Log::info('DodoPayments: Calling payments->create() via SDK');
                 
                 // Set a maximum execution time for this specific operation
                 $startTime = microtime(true);
