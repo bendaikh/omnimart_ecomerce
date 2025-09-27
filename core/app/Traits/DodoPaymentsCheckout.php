@@ -191,9 +191,9 @@ trait DodoPaymentsCheckout
             $productCart = [
                 [
                     'product_id' => $orderData['transaction_number'],
-                    'quantity' => '1',  // Convert to string
+                    'quantity' => 1,  // Keep as integer (u32)
                     'name' => $setting->title . ' Order',
-                    'price' => $total_amount,
+                    'price' => (int) round($total_amount * 100),  // Convert to cents (integer)
                     'currency' => 'USD'
                 ]
             ];
