@@ -921,6 +921,10 @@
                                 console.log('Using mock payment interface');
                                 // For localhost, show a mock payment interface
                                 showMockPaymentInterface(data.payment_id);
+                            } else if (data.checkout_url) {
+                                console.log('Using Checkout Sessions approach');
+                                // Use Checkout Sessions - redirect to checkout URL
+                                window.location.href = data.checkout_url;
                             } else {
                                 console.log('Using real DodoPayments overlay');
                                 // Initialize DodoPayments overlay checkout

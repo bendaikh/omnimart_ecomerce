@@ -249,83 +249,22 @@ trait DodoPaymentsCheckout
                 'timeout' => $requestOptions->timeout
             ]);
             
-            // Try Dynamic Payment Links approach as per documentation
+            // Use Checkout Sessions approach as per the latest documentation
             try {
-                \Log::info('DodoPayments: Using Dynamic Payment Links approach');
+                \Log::info('DodoPayments: Using Checkout Sessions approach');
                 
-                // Create payment using the exact structure from documentation
-                $paymentPayload = [
-                    'payment_link' => true,
-                    'billing' => $billing,
-                    'customer' => $customer,
-                    'product_cart' => [
-                        [
-                            'product_id' => 'direct_order_' . time(),
-                            'quantity' => 1,
-                            'name' => $setting->title . ' Order',
-                            'price' => [
-                                'amount' => (int) round($total_amount * 100),
-                                'currency' => 'USD',
-                                'type' => 'one_time_price'
-                            ]
-                        ]
-                    ],
-                    'return_url' => $returnURL,
-                    'metadata' => $metadata
-                ];
-                
-                \Log::info('DodoPayments: Dynamic payment payload', ['payload' => $paymentPayload]);
-                
-                $response = \Http::timeout(30)
-                    ->withHeaders([
-                        'Authorization' => 'Bearer ' . $apiKey,
-                        'Content-Type' => 'application/json',
-                        'Accept' => 'application/json'
-                    ])
-                    ->post($baseUrl . '/payments', $paymentPayload);
-                
-                \Log::info('DodoPayments: Dynamic payment response', [
-                    'status' => $response->status(),
-                    'response_body' => $response->body()
-                ]);
-                
-                if ($response->successful()) {
-                    $responseData = $response->json();
-                    $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? $responseData['checkout_session_id'] ?? null;
-                    
-                    if ($paymentId) {
-                        \Log::info('DodoPayments: Dynamic payment created successfully', [
-                            'payment_id' => $paymentId
-                        ]);
-                        
-                        // Return success with payment ID for overlay checkout
-                        return [
-                            'status' => true,
-                            'payment_id' => $paymentId,
-                            'overlay_checkout' => true,
-                            'api_key' => $apiKey
-                        ];
-                    }
-                } else {
-                    \Log::warning('DodoPayments: Dynamic payment failed, trying alternative approach', [
-                        'status' => $response->status(),
-                        'response_body' => $response->body()
-                    ]);
-                }
-                
-                // If dynamic payment doesn't work, try creating a product first
-                \Log::info('DodoPayments: Trying product creation approach');
-                
-                // Try to create a product with minimal structure
+                // First, we need to create a product in the dashboard or via API
+                // Let's try to create a simple product first
                 $productData = [
                     'name' => $setting->title . ' Order',
                     'price' => [
                         'amount' => (int) round($total_amount * 100),
-                        'currency' => 'USD'
+                        'currency' => 'USD',
+                        'type' => 'one_time_price'
                     ]
                 ];
                 
-                \Log::info('DodoPayments: Creating minimal product', ['product_data' => $productData]);
+                \Log::info('DodoPayments: Creating product for checkout session', ['product_data' => $productData]);
                 
                 $productResponse = \Http::timeout(30)
                     ->withHeaders([
@@ -340,69 +279,93 @@ trait DodoPaymentsCheckout
                     'response_body' => $productResponse->body()
                 ]);
                 
+                $productId = null;
                 if ($productResponse->successful()) {
                     $productResult = $productResponse->json();
                     $productId = $productResult['id'] ?? $productResult['product_id'] ?? null;
                     
                     if ($productId) {
-                        \Log::info('DodoPayments: Product created successfully', [
-                            'product_id' => $productId
+                        \Log::info('DodoPayments: Product created successfully', ['product_id' => $productId]);
+                    }
+                }
+                
+                if (!$productId) {
+                    \Log::warning('DodoPayments: Product creation failed, trying alternative approach');
+                    throw new \Exception('Product creation failed');
+                }
+                
+                // Now create a Checkout Session using the created product
+                $checkoutSessionPayload = [
+                    'product_cart' => [
+                        [
+                            'product_id' => $productId,
+                            'quantity' => 1
+                        ]
+                    ],
+                    'customer' => [
+                        'email' => $customer['email'],
+                        'name' => $customer['name']
+                    ],
+                    'billing_address' => [
+                        'street' => $billing['street'],
+                        'city' => $billing['city'],
+                        'state' => $billing['state'],
+                        'country' => $billing['country'],
+                        'zipcode' => $billing['zipcode']
+                    ],
+                    'return_url' => $returnURL,
+                    'metadata' => $metadata
+                ];
+                
+                \Log::info('DodoPayments: Creating checkout session', ['payload' => $checkoutSessionPayload]);
+                
+                $checkoutResponse = \Http::timeout(30)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type' => 'application/json',
+                        'Accept' => 'application/json'
+                    ])
+                    ->post($baseUrl . '/checkout-sessions', $checkoutSessionPayload);
+                
+                \Log::info('DodoPayments: Checkout session response', [
+                    'status' => $checkoutResponse->status(),
+                    'response_body' => $checkoutResponse->body()
+                ]);
+                
+                if ($checkoutResponse->successful()) {
+                    $checkoutData = $checkoutResponse->json();
+                    $checkoutUrl = $checkoutData['checkout_url'] ?? $checkoutData['session_url'] ?? null;
+                    $sessionId = $checkoutData['session_id'] ?? $checkoutData['checkout_session_id'] ?? null;
+                    
+                    if ($checkoutUrl) {
+                        \Log::info('DodoPayments: Checkout session created successfully', [
+                            'session_id' => $sessionId,
+                            'checkout_url' => $checkoutUrl
                         ]);
                         
-                        // Now create payment with the real product ID
-                        $paymentPayload = [
-                            'payment_link' => true,
-                            'billing' => $billing,
-                            'customer' => $customer,
-                            'product_cart' => [
-                                [
-                                    'product_id' => $productId,
-                                    'quantity' => 1
-                                ]
-                            ],
-                            'return_url' => $returnURL,
-                            'metadata' => $metadata
-                        ];
-                        
-                        \Log::info('DodoPayments: Creating payment with real product', ['payload' => $paymentPayload]);
-                        
-                        $paymentResponse = \Http::timeout(30)
-                            ->withHeaders([
-                                'Authorization' => 'Bearer ' . $apiKey,
-                                'Content-Type' => 'application/json',
-                                'Accept' => 'application/json'
-                            ])
-                            ->post($baseUrl . '/payments', $paymentPayload);
-                        
-                        \Log::info('DodoPayments: Payment with product response', [
-                            'status' => $paymentResponse->status(),
-                            'response_body' => $paymentResponse->body()
-                        ]);
-                        
-                        if ($paymentResponse->successful()) {
-                            $responseData = $paymentResponse->json();
-                            $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? $responseData['checkout_session_id'] ?? null;
-                            
-                            if ($paymentId) {
-                                \Log::info('DodoPayments: Payment with product created successfully', [
-                                    'payment_id' => $paymentId
-                                ]);
-                                
-                                return [
-                                    'status' => true,
-                                    'payment_id' => $paymentId,
-                                    'overlay_checkout' => true,
-                                    'api_key' => $apiKey
-                                ];
-                            }
+                        // For overlay checkout, we need to extract the session ID from the URL
+                        // The URL format is: https://checkout.dodopayments.com/session/{session_id}
+                        if ($sessionId) {
+                            return [
+                                'status' => true,
+                                'payment_id' => $sessionId, // Use session ID for overlay
+                                'checkout_url' => $checkoutUrl,
+                                'overlay_checkout' => true,
+                                'api_key' => $apiKey
+                            ];
                         }
                     }
+                } else {
+                    \Log::warning('DodoPayments: Checkout session creation failed', [
+                        'status' => $checkoutResponse->status(),
+                        'response_body' => $checkoutResponse->body()
+                    ]);
                 }
                 
                 \Log::info('DodoPayments: Falling back to SDK method');
                 
             } catch (\Exception $e) {
-                \Log::warning('DodoPayments: Direct HTTP call failed, trying SDK', [
+                \Log::warning('DodoPayments: Checkout Sessions approach failed, trying SDK', [
                     'message' => $e->getMessage()
                 ]);
             }
