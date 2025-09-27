@@ -435,6 +435,29 @@ Route::group(['middleware' => 'maintainance'], function () {
         Route::get('/checkout/success', 'Front\CheckoutController@paymentSuccess')->name('front.checkout.success');
         Route::get('/checkout/cancle', 'Front\CheckoutController@paymentCancle')->name('front.checkout.cancle');
         Route::get('/checkout/redirect', 'Front\CheckoutController@paymentRedirect')->name('front.checkout.redirect');
+        
+        // Debug route for DodoPayments
+        Route::get('/debug/dodopayments', function() {
+            $dodoSettings = \App\Models\PaymentSetting::where('unique_keyword', 'dodopayments')->first();
+            
+            if (!$dodoSettings) {
+                return response()->json([
+                    'error' => 'DodoPayments settings not found',
+                    'available_payment_methods' => \App\Models\PaymentSetting::pluck('unique_keyword')
+                ]);
+            }
+            
+            $dodoData = $dodoSettings->convertJsonData();
+            
+            return response()->json([
+                'status' => $dodoSettings->status,
+                'has_api_key' => !empty($dodoData['api_key'] ?? null),
+                'api_key_length' => strlen($dodoData['api_key'] ?? ''),
+                'has_webhook_secret' => !empty($dodoData['webhook_secret'] ?? null),
+                'webhook_secret_length' => strlen($dodoData['webhook_secret'] ?? ''),
+                'environment' => app()->environment()
+            ]);
+        });
         Route::get('/checkout/mollie/notify', 'Front\CheckoutController@mollieRedirect')->name('front.checkout.mollie.redirect');
         Route::post('/checkout/dodopayments/webhook', 'Front\CheckoutController@dodoPaymentsWebhook')->name('front.checkout.dodopayments.webhook');
 

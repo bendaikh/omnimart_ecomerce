@@ -98,15 +98,29 @@ trait DodoPaymentsCheckout
             // Get DodoPayments settings from database
             $dodoSettings = \App\Models\PaymentSetting::whereUniqueKeyword('dodopayments')->first();
             if (!$dodoSettings) {
+                \Log::error('DodoPayments: Settings not found in database');
                 throw new \Exception('DodoPayments settings not found');
             }
+            
+            \Log::info('DodoPayments: Settings found', [
+                'status' => $dodoSettings->status,
+                'has_data' => !empty($dodoSettings->convertJsonData())
+            ]);
             
             $dodoData = $dodoSettings->convertJsonData();
             $apiKey = $dodoData['api_key'] ?? null;
             
             if (empty($apiKey)) {
+                \Log::error('DodoPayments: API key is empty', [
+                    'dodo_data' => $dodoData
+                ]);
                 throw new \Exception('DodoPayments API key is not configured');
             }
+            
+            \Log::info('DodoPayments: API key found', [
+                'api_key_length' => strlen($apiKey),
+                'api_key_prefix' => substr($apiKey, 0, 10) . '...'
+            ]);
             
             // Prepare billing address
             $billingAddress = Session::get('billing_address');

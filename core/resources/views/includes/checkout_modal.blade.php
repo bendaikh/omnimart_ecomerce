@@ -417,35 +417,80 @@
                  <input type="hidden" name="description" />
                  <input type="hidden" name="paymentMethodId" />
              </form>
-             <script src="https://sdk.mercadopago.com/js/v2"></script>
              <script>
-                 const mp = new MercadoPago("{{ $paydata['public_key'] }}");
+                 // Load MercadoPago SDK only when modal is opened
+                 let mp = null;
+                 let cardNumberElement = null;
+                 let expirationDateElement = null;
+                 let securityCodeElement = null;
+                 
+                 // Initialize MercadoPago when modal is shown
+                 document.getElementById('mercadopago').addEventListener('shown.bs.modal', function () {
+                     if (!mp && !window.paymentSDKLoading) {
+                         window.paymentSDKLoading = true;
+                         // Load SDK dynamically
+                         const script = document.createElement('script');
+                         script.src = 'https://sdk.mercadopago.com/js/v2';
+                         script.onload = function() {
+                             try {
+                                 mp = new MercadoPago("{{ $paydata['public_key'] }}");
+                                 
+                                 cardNumberElement = mp.fields.create('cardNumber', {
+                                     placeholder: "Card Number"
+                                 }).mount('cardNumber');
 
-                 const cardNumberElement = mp.fields.create('cardNumber', {
-                     placeholder: "Card Number"
-                 }).mount('cardNumber');
+                                 expirationDateElement = mp.fields.create('expirationDate', {
+                                     placeholder: "MM/YY",
+                                 }).mount('expirationDate');
 
-                 const expirationDateElement = mp.fields.create('expirationDate', {
-                     placeholder: "MM/YY",
-                 }).mount('expirationDate');
+                                 securityCodeElement = mp.fields.create('securityCode', {
+                                     placeholder: "Security Code"
+                                 }).mount('securityCode');
+                                 
+                                 // Load identification types after SDK is ready
+                                 getIdentificationTypes();
+                                 
+                                 // Set up event listeners
+                                 setupMercadoPagoEventListeners();
+                                 
+                                 // Set up form submission handler
+                                 setupMercadoPagoFormHandler();
+                                 
+                                 console.log('MercadoPago SDK loaded successfully');
+                                 window.paymentSDKLoading = false;
+                             } catch (error) {
+                                 console.error('MercadoPago initialization error:', error);
+                                 alert('Payment service initialization failed. Please try again.');
+                                 window.paymentSDKLoading = false;
+                             }
+                         };
+                         script.onerror = function() {
+                             console.error('Failed to load MercadoPago SDK');
+                             alert('Payment service unavailable. Please try a different payment method.');
+                             window.paymentSDKLoading = false;
+                         };
+                         document.head.appendChild(script);
+                     }
+                 });
 
-                 const securityCodeElement = mp.fields.create('securityCode', {
-                     placeholder: "Security Code"
-                 }).mount('securityCode');
 
-
-                 (async function getIdentificationTypes() {
+                 // Function to get identification types (called after SDK loads)
+                 async function getIdentificationTypes() {
+                     if (!mp) {
+                         console.error('MercadoPago SDK not loaded yet');
+                         return;
+                     }
+                     
                      try {
                          const identificationTypes = await mp.getIdentificationTypes();
-
                          const identificationTypeElement = document.getElementById('docType');
-
-                         createSelectOptions(identificationTypeElement, identificationTypes);
-
+                         if (identificationTypeElement) {
+                             createSelectOptions(identificationTypeElement, identificationTypes);
+                         }
                      } catch (e) {
-                         return console.error('Error getting identificationTypes: ', e);
+                         console.error('Error getting identificationTypes: ', e);
                      }
-                 })();
+                 }
 
                  function createSelectOptions(elem, options, labelsAndKeys = {
                      label: "name",
@@ -475,7 +520,14 @@
 
                      elem.appendChild(tempOptions);
                  }
-                 cardNumberElement.on('binChange', getPaymentMethods);
+                 
+                 // Set up event listeners after SDK loads
+                 function setupMercadoPagoEventListeners() {
+                     if (cardNumberElement) {
+                         cardNumberElement.on('binChange', getPaymentMethods);
+                     }
+                 }
+                 
                  async function getPaymentMethods(data) {
                      const {
                          bin
@@ -515,19 +567,31 @@
                      });
 
                  }
-                 doSubmit = false;
-                 document.getElementById('mercadopagofrom').addEventListener('submit', getCardToken);
+                 
+                 let doSubmit = false;
+                 
+                 // Set up form submission handler after SDK loads
+                 function setupMercadoPagoFormHandler() {
+                     const form = document.getElementById('mercadopagofrom');
+                     if (form) {
+                         form.addEventListener('submit', getCardToken);
+                     }
+                 }
 
                  async function getCardToken(event) {
                      event.preventDefault();
-                     if (!doSubmit) {
-                         let $form = document.getElementById('mercadopagofrom');
-                         const token = await mp.fields.createCardToken({
-                             cardholderName: document.getElementById('cardholderName').value,
-                             identificationType: document.getElementById('docType').value,
-                             identificationNumber: document.getElementById('docNumber').value,
-                         })
-                         setCardTokenAndPay(token.id)
+                     if (!doSubmit && mp) {
+                         try {
+                             const token = await mp.fields.createCardToken({
+                                 cardholderName: document.getElementById('cardholderName').value,
+                                 identificationType: document.getElementById('docType').value,
+                                 identificationNumber: document.getElementById('docNumber').value,
+                             });
+                             setCardTokenAndPay(token.id);
+                         } catch (error) {
+                             console.error('Error creating card token:', error);
+                             alert('Payment processing failed. Please try again.');
+                         }
                      }
                  };
 
@@ -799,6 +863,9 @@
     
     <!-- DodoPayments Overlay Checkout Script -->
     <script>
+        // Global flag to prevent multiple payment SDKs from loading
+        window.paymentSDKLoading = false;
+        
         document.addEventListener('DOMContentLoaded', function() {
             const dodopaymentsPayBtn = document.getElementById('dodopayments-pay-btn');
             const dodopaymentsForm = document.getElementById('dodopayments-form');
@@ -833,7 +900,14 @@
                         
                         // Check if response is JSON
                         const contentType = response.headers.get('content-type');
+                        console.log('Response status:', response.status);
+                        console.log('Response content-type:', contentType);
+                        
                         if (!contentType || !contentType.includes('application/json')) {
+                            // Log the actual response for debugging
+                            response.text().then(text => {
+                                console.error('Non-JSON response received:', text.substring(0, 500));
+                            });
                             throw new Error('Server returned non-JSON response. This usually indicates a server error.');
                         }
                         

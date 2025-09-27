@@ -367,12 +367,41 @@ class CheckoutController extends Controller
 
     public function checkout(PaymentRequest $request)
     {
+        try {
+            // Add debugging for request data
+            \Log::info('Checkout request received', [
+                'payment_method' => $request->get('payment_method'),
+                'is_ajax' => $request->ajax(),
+                'wants_json' => $request->wantsJson(),
+                'has_cart' => Session::has('cart'),
+                'cart_count' => Session::has('cart') ? count(Session::get('cart')) : 0,
+                'has_billing_address' => Session::has('billing_address'),
+                'has_shipping_address' => Session::has('shipping_address'),
+                'user_authenticated' => Auth::check(),
+                'user_id' => Auth::id()
+            ]);
 
-
-
-        PriceHelper::checkCheckout($request);
+            PriceHelper::checkCheckout($request);
+            \Log::info('PriceHelper::checkCheckout completed successfully');
+        } catch (\Exception $e) {
+            \Log::error('Checkout method exception', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            // Return proper JSON error response for AJAX requests
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Checkout failed: ' . $e->getMessage()
+                ], 500);
+            }
+            
+            throw $e; // Re-throw for non-AJAX requests
+        }
 
         $input = $request->all();
+        \Log::info('Input data processed', ['input_keys' => array_keys($input)]);
 
         $checkout = false;
         $payment_redirect = false;
@@ -383,6 +412,7 @@ class CheckoutController extends Controller
         } else {
             $currency = Currency::where('is_default', 1)->first();
         }
+        \Log::info('Currency determined', ['currency_name' => $currency->name, 'currency_id' => $currency->id]);
 
 
         $usd_supported = array(
@@ -525,6 +555,7 @@ class CheckoutController extends Controller
 
         $paypal_supported = ['USD', 'EUR', 'AUD', 'BRL', 'CAD', 'HKD', 'JPY', 'MXN', 'NZD', 'PHP', 'GBP', 'RUB'];
         $paystack_supported = ['NGN', "GHS", "USD", "ZAR", "KES"];
+        \Log::info('About to process payment method', ['payment_method' => $input['payment_method']]);
         switch ($input['payment_method']) {
 
             case 'Stripe':
@@ -591,6 +622,7 @@ class CheckoutController extends Controller
                 break;
 
             case 'DodoPayments':
+                \Log::info('DodoPayments case reached', ['currency' => $currency->name]);
                 if (!in_array($currency->name, ['USD'])) {
                     Session::flash('error', __('Currency Not Supported'));
                     return redirect()->back();
@@ -603,17 +635,36 @@ class CheckoutController extends Controller
                     'currency' => $currency->name,
                     'is_ajax' => request()->ajax(),
                     'wants_json' => request()->wantsJson(),
-                    'user_agent' => request()->userAgent()
+                    'user_agent' => request()->userAgent(),
+                    'input_data' => $input
                 ]);
                 
-                $payment = $this->dodoPaymentsSubmit($input);
-                
-                \Log::info('DodoPayments: Payment result', [
-                    'status' => $payment['status'] ?? 'unknown',
-                    'message' => $payment['message'] ?? 'no message',
-                    'has_overlay_checkout' => isset($payment['overlay_checkout']),
-                    'has_payment_id' => isset($payment['payment_id'])
-                ]);
+                try {
+                    $payment = $this->dodoPaymentsSubmit($input);
+                    
+                    \Log::info('DodoPayments: Payment result', [
+                        'status' => $payment['status'] ?? 'unknown',
+                        'message' => $payment['message'] ?? 'no message',
+                        'has_overlay_checkout' => isset($payment['overlay_checkout']),
+                        'has_payment_id' => isset($payment['payment_id']),
+                        'full_response' => $payment
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::error('DodoPayments: Exception in controller', [
+                        'message' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    
+                    // Return proper JSON error response for AJAX requests
+                    if (request()->ajax() || request()->wantsJson()) {
+                        return response()->json([
+                            'status' => false,
+                            'message' => 'Payment processing failed: ' . $e->getMessage()
+                        ], 500);
+                    }
+                    
+                    throw $e; // Re-throw for non-AJAX requests
+                }
                 
                 break;
         }
