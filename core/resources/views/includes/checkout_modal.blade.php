@@ -815,15 +815,23 @@
                     // Submit form via AJAX
                     const formData = new FormData(dodopaymentsForm);
                     
+                    // Create AbortController for timeout
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 seconds timeout
+                    
                     fetch(dodopaymentsForm.action, {
                         method: 'POST',
                         body: formData,
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                        }
+                        },
+                        signal: controller.signal
                     })
-                    .then(response => response.json())
+                    .then(response => {
+                        clearTimeout(timeoutId);
+                        return response.json();
+                    })
                     .then(data => {
                         console.log('DodoPayments response:', data);
                         if (data.status && data.overlay_checkout) {
@@ -844,8 +852,22 @@
                         }
                     })
                     .catch(error => {
-                        console.error('Error:', error);
-                        alert('An error occurred while processing payment');
+                        clearTimeout(timeoutId);
+                        console.error('DodoPayments AJAX Error:', error);
+                        console.error('Response:', error.response);
+                        console.error('Status:', error.status);
+                        
+                        let errorMessage = 'An error occurred while processing payment';
+                        
+                        if (error.name === 'AbortError') {
+                            errorMessage = 'Request timed out. Please check your connection and try again.';
+                        } else if (error.response && error.response.data && error.response.data.message) {
+                            errorMessage = error.response.data.message;
+                        } else if (error.message) {
+                            errorMessage = error.message;
+                        }
+                        
+                        alert('DodoPayments Error: ' + errorMessage);
                         resetButton();
                     });
                 });

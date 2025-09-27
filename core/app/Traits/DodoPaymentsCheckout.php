@@ -160,21 +160,44 @@ trait DodoPaymentsCheckout
             $requestOptions = new \Dodopayments\RequestOptions();
             $requestOptions->timeout = 30; // 30 seconds timeout
             
+            \Log::info('DodoPayments: About to create payment', [
+                'api_key_length' => strlen($apiKey),
+                'billing' => $billing,
+                'customer' => $customer,
+                'product_cart' => $productCart,
+                'return_url' => $returnURL,
+                'timeout' => $requestOptions->timeout
+            ]);
+            
             // Create payment using the official SDK with correct parameters
-            $payment = $client->payments->create(
-                $billing,
-                $customer,
-                $productCart,
-                null, // allowedPaymentMethodTypes
-                null, // billingCurrency
-                null, // discountCode
-                $metadata,
-                null, // paymentLink
-                $returnURL,
-                null, // showSavedPaymentMethods
-                null, // taxID
-                $requestOptions // RequestOptions with timeout
-            );
+            try {
+                $payment = $client->payments->create(
+                    $billing,
+                    $customer,
+                    $productCart,
+                    null, // allowedPaymentMethodTypes
+                    null, // billingCurrency
+                    null, // discountCode
+                    $metadata,
+                    null, // paymentLink
+                    $returnURL,
+                    null, // showSavedPaymentMethods
+                    null, // taxID
+                    $requestOptions // RequestOptions with timeout
+                );
+            } catch (\GuzzleHttp\Exception\ConnectException $e) {
+                \Log::error('DodoPayments: Connection timeout', [
+                    'message' => $e->getMessage(),
+                    'timeout' => $requestOptions->timeout
+                ]);
+                throw new \Exception('Connection to DodoPayments timed out. Please try again.');
+            } catch (\GuzzleHttp\Exception\RequestException $e) {
+                \Log::error('DodoPayments: Request failed', [
+                    'message' => $e->getMessage(),
+                    'response' => $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : 'No response'
+                ]);
+                throw new \Exception('DodoPayments request failed: ' . $e->getMessage());
+            }
             
             \Log::info('DodoPayments payment created successfully', [
                 'payment_id' => $payment->payment_id ?? 'unknown',
@@ -202,11 +225,13 @@ trait DodoPaymentsCheckout
         } catch (\Exception $e) {
             \Log::error('DodoPayments Exception', [
                 'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'api_key' => substr($apiKey, 0, 10) . '...',
+                'environment' => app()->environment()
             ]);
             return [
                 'status' => false,
-                'message' => $e->getMessage()
+                'message' => 'Payment initialization failed: ' . $e->getMessage()
             ];
         }
     }
