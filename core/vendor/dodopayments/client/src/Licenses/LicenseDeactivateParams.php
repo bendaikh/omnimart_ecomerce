@@ -1,0 +1,96 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Dodopayments\Licenses;
+
+use Dodopayments\Core\Attributes\Api;
+use Dodopayments\Core\Concerns\SdkModel;
+use Dodopayments\Core\Concerns\SdkParams;
+use Dodopayments\Core\Contracts\BaseModel;
+
+/**
+ * An object containing the method's parameters.
+ * Example usage:
+ * ```
+ * $params = (new LicenseDeactivateParams); // set properties as needed
+ * $client->licenses->deactivate(...$params->toArray());
+ * ```.
+ *
+ * @method toArray()
+ *   Returns the parameters as an associative array suitable for passing to the client method.
+ *
+ *   `$client->licenses->deactivate(...$params->toArray());`
+ *
+ * @see Dodopayments\Licenses->deactivate
+ *
+ * @phpstan-type license_deactivate_params = array{
+ *   licenseKey: string, licenseKeyInstanceID: string
+ * }
+ */
+final class LicenseDeactivateParams implements BaseModel
+{
+    /** @use SdkModel<license_deactivate_params> */
+    use SdkModel;
+    use SdkParams;
+
+    #[Api('license_key')]
+    public string $licenseKey;
+
+    #[Api('license_key_instance_id')]
+    public string $licenseKeyInstanceID;
+
+    /**
+     * `new LicenseDeactivateParams()` is missing required properties by the API.
+     *
+     * To enforce required parameters use
+     * ```
+     * LicenseDeactivateParams::with(licenseKey: ..., licenseKeyInstanceID: ...)
+     * ```
+     *
+     * Otherwise ensure the following setters are called
+     *
+     * ```
+     * (new LicenseDeactivateParams)
+     *   ->withLicenseKey(...)
+     *   ->withLicenseKeyInstanceID(...)
+     * ```
+     */
+    public function __construct()
+    {
+        $this->initialize();
+    }
+
+    /**
+     * Construct an instance from the required parameters.
+     *
+     * You must use named parameters to construct any parameters with a default value.
+     */
+    public static function with(
+        string $licenseKey,
+        string $licenseKeyInstanceID
+    ): self {
+        $obj = new self;
+
+        $obj->licenseKey = $licenseKey;
+        $obj->licenseKeyInstanceID = $licenseKeyInstanceID;
+
+        return $obj;
+    }
+
+    public function withLicenseKey(string $licenseKey): self
+    {
+        $obj = clone $this;
+        $obj->licenseKey = $licenseKey;
+
+        return $obj;
+    }
+
+    public function withLicenseKeyInstanceID(string $licenseKeyInstanceID): self
+    {
+        $obj = clone $this;
+        $obj->licenseKeyInstanceID = $licenseKeyInstanceID;
+
+        return $obj;
+    }
+}

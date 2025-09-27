@@ -1,0 +1,221 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Dodopayments\Discounts;
+
+use Dodopayments\Core\Attributes\Api;
+use Dodopayments\Core\Concerns\SdkModel;
+use Dodopayments\Core\Concerns\SdkParams;
+use Dodopayments\Core\Contracts\BaseModel;
+
+/**
+ * An object containing the method's parameters.
+ * Example usage:
+ * ```
+ * $params = (new DiscountUpdateParams); // set properties as needed
+ * $client->discounts->update(...$params->toArray());
+ * ```
+ * PATCH /discounts/{discount_id}.
+ *
+ * @method toArray()
+ *   Returns the parameters as an associative array suitable for passing to the client method.
+ *
+ *   `$client->discounts->update(...$params->toArray());`
+ *
+ * @see Dodopayments\Discounts->update
+ *
+ * @phpstan-type discount_update_params = array{
+ *   amount?: int|null,
+ *   code?: string|null,
+ *   expiresAt?: \DateTimeInterface|null,
+ *   name?: string|null,
+ *   restrictedTo?: list<string>|null,
+ *   subscriptionCycles?: int|null,
+ *   type?: null|DiscountType|value-of<DiscountType>,
+ *   usageLimit?: int|null,
+ * }
+ */
+final class DiscountUpdateParams implements BaseModel
+{
+    /** @use SdkModel<discount_update_params> */
+    use SdkModel;
+    use SdkParams;
+
+    /**
+     * If present, update the discount amount:
+     * - If `discount_type` is `percentage`, this represents **basis points** (e.g., `540` = `5.4%`).
+     * - Otherwise, this represents **USD cents** (e.g., `100` = `$1.00`).
+     *
+     * Must be at least 1 if provided.
+     */
+    #[Api(nullable: true, optional: true)]
+    public ?int $amount;
+
+    /**
+     * If present, update the discount code (uppercase).
+     */
+    #[Api(nullable: true, optional: true)]
+    public ?string $code;
+
+    #[Api('expires_at', nullable: true, optional: true)]
+    public ?\DateTimeInterface $expiresAt;
+
+    #[Api(nullable: true, optional: true)]
+    public ?string $name;
+
+    /**
+     * If present, replaces all restricted product IDs with this new set.
+     * To remove all restrictions, send empty array.
+     *
+     * @var list<string>|null $restrictedTo
+     */
+    #[Api('restricted_to', list: 'string', nullable: true, optional: true)]
+    public ?array $restrictedTo;
+
+    /**
+     * Number of subscription billing cycles this discount is valid for.
+     * If not provided, the discount will be applied indefinitely to
+     * all recurring payments related to the subscription.
+     */
+    #[Api('subscription_cycles', nullable: true, optional: true)]
+    public ?int $subscriptionCycles;
+
+    /**
+     * If present, update the discount type.
+     *
+     * @var value-of<DiscountType>|null $type
+     */
+    #[Api(enum: DiscountType::class, nullable: true, optional: true)]
+    public ?string $type;
+
+    #[Api('usage_limit', nullable: true, optional: true)]
+    public ?int $usageLimit;
+
+    public function __construct()
+    {
+        $this->initialize();
+    }
+
+    /**
+     * Construct an instance from the required parameters.
+     *
+     * You must use named parameters to construct any parameters with a default value.
+     *
+     * @param list<string>|null $restrictedTo
+     * @param DiscountType|value-of<DiscountType>|null $type
+     */
+    public static function with(
+        ?int $amount = null,
+        ?string $code = null,
+        ?\DateTimeInterface $expiresAt = null,
+        ?string $name = null,
+        ?array $restrictedTo = null,
+        ?int $subscriptionCycles = null,
+        DiscountType|string|null $type = null,
+        ?int $usageLimit = null,
+    ): self {
+        $obj = new self;
+
+        null !== $amount && $obj->amount = $amount;
+        null !== $code && $obj->code = $code;
+        null !== $expiresAt && $obj->expiresAt = $expiresAt;
+        null !== $name && $obj->name = $name;
+        null !== $restrictedTo && $obj->restrictedTo = $restrictedTo;
+        null !== $subscriptionCycles && $obj->subscriptionCycles = $subscriptionCycles;
+        null !== $type && $obj->type = $type instanceof DiscountType ? $type->value : $type;
+        null !== $usageLimit && $obj->usageLimit = $usageLimit;
+
+        return $obj;
+    }
+
+    /**
+     * If present, update the discount amount:
+     * - If `discount_type` is `percentage`, this represents **basis points** (e.g., `540` = `5.4%`).
+     * - Otherwise, this represents **USD cents** (e.g., `100` = `$1.00`).
+     *
+     * Must be at least 1 if provided.
+     */
+    public function withAmount(?int $amount): self
+    {
+        $obj = clone $this;
+        $obj->amount = $amount;
+
+        return $obj;
+    }
+
+    /**
+     * If present, update the discount code (uppercase).
+     */
+    public function withCode(?string $code): self
+    {
+        $obj = clone $this;
+        $obj->code = $code;
+
+        return $obj;
+    }
+
+    public function withExpiresAt(?\DateTimeInterface $expiresAt): self
+    {
+        $obj = clone $this;
+        $obj->expiresAt = $expiresAt;
+
+        return $obj;
+    }
+
+    public function withName(?string $name): self
+    {
+        $obj = clone $this;
+        $obj->name = $name;
+
+        return $obj;
+    }
+
+    /**
+     * If present, replaces all restricted product IDs with this new set.
+     * To remove all restrictions, send empty array.
+     *
+     * @param list<string>|null $restrictedTo
+     */
+    public function withRestrictedTo(?array $restrictedTo): self
+    {
+        $obj = clone $this;
+        $obj->restrictedTo = $restrictedTo;
+
+        return $obj;
+    }
+
+    /**
+     * Number of subscription billing cycles this discount is valid for.
+     * If not provided, the discount will be applied indefinitely to
+     * all recurring payments related to the subscription.
+     */
+    public function withSubscriptionCycles(?int $subscriptionCycles): self
+    {
+        $obj = clone $this;
+        $obj->subscriptionCycles = $subscriptionCycles;
+
+        return $obj;
+    }
+
+    /**
+     * If present, update the discount type.
+     *
+     * @param DiscountType|value-of<DiscountType>|null $type
+     */
+    public function withType(DiscountType|string|null $type): self
+    {
+        $obj = clone $this;
+        $obj->type = $type instanceof DiscountType ? $type->value : $type;
+
+        return $obj;
+    }
+
+    public function withUsageLimit(?int $usageLimit): self
+    {
+        $obj = clone $this;
+        $obj->usageLimit = $usageLimit;
+
+        return $obj;
+    }
+}

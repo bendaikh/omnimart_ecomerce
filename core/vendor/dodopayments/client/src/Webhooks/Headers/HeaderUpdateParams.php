@@ -1,0 +1,91 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Dodopayments\Webhooks\Headers;
+
+use Dodopayments\Core\Attributes\Api;
+use Dodopayments\Core\Concerns\SdkModel;
+use Dodopayments\Core\Concerns\SdkParams;
+use Dodopayments\Core\Contracts\BaseModel;
+
+/**
+ * An object containing the method's parameters.
+ * Example usage:
+ * ```
+ * $params = (new HeaderUpdateParams); // set properties as needed
+ * $client->webhooks.headers->update(...$params->toArray());
+ * ```
+ * Patch a webhook by id.
+ *
+ * @method toArray()
+ *   Returns the parameters as an associative array suitable for passing to the client method.
+ *
+ *   `$client->webhooks.headers->update(...$params->toArray());`
+ *
+ * @see Dodopayments\Webhooks\Headers->update
+ *
+ * @phpstan-type header_update_params = array{headers: array<string, string>}
+ */
+final class HeaderUpdateParams implements BaseModel
+{
+    /** @use SdkModel<header_update_params> */
+    use SdkModel;
+    use SdkParams;
+
+    /**
+     * Object of header-value pair to update or add.
+     *
+     * @var array<string, string> $headers
+     */
+    #[Api(map: 'string')]
+    public array $headers;
+
+    /**
+     * `new HeaderUpdateParams()` is missing required properties by the API.
+     *
+     * To enforce required parameters use
+     * ```
+     * HeaderUpdateParams::with(headers: ...)
+     * ```
+     *
+     * Otherwise ensure the following setters are called
+     *
+     * ```
+     * (new HeaderUpdateParams)->withHeaders(...)
+     * ```
+     */
+    public function __construct()
+    {
+        $this->initialize();
+    }
+
+    /**
+     * Construct an instance from the required parameters.
+     *
+     * You must use named parameters to construct any parameters with a default value.
+     *
+     * @param array<string, string> $headers
+     */
+    public static function with(array $headers): self
+    {
+        $obj = new self;
+
+        $obj->headers = $headers;
+
+        return $obj;
+    }
+
+    /**
+     * Object of header-value pair to update or add.
+     *
+     * @param array<string, string> $headers
+     */
+    public function withHeaders(array $headers): self
+    {
+        $obj = clone $this;
+        $obj->headers = $headers;
+
+        return $obj;
+    }
+}

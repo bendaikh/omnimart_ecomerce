@@ -1,0 +1,91 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Dodopayments\Discounts;
+
+use Dodopayments\Core\Attributes\Api;
+use Dodopayments\Core\Concerns\SdkModel;
+use Dodopayments\Core\Concerns\SdkParams;
+use Dodopayments\Core\Contracts\BaseModel;
+
+/**
+ * An object containing the method's parameters.
+ * Example usage:
+ * ```
+ * $params = (new DiscountListParams); // set properties as needed
+ * $client->discounts->list(...$params->toArray());
+ * ```
+ * GET /discounts.
+ *
+ * @method toArray()
+ *   Returns the parameters as an associative array suitable for passing to the client method.
+ *
+ *   `$client->discounts->list(...$params->toArray());`
+ *
+ * @see Dodopayments\Discounts->list
+ *
+ * @phpstan-type discount_list_params = array{pageNumber?: int, pageSize?: int}
+ */
+final class DiscountListParams implements BaseModel
+{
+    /** @use SdkModel<discount_list_params> */
+    use SdkModel;
+    use SdkParams;
+
+    /**
+     * Page number (default = 0).
+     */
+    #[Api(optional: true)]
+    public ?int $pageNumber;
+
+    /**
+     * Page size (default = 10, max = 100).
+     */
+    #[Api(optional: true)]
+    public ?int $pageSize;
+
+    public function __construct()
+    {
+        $this->initialize();
+    }
+
+    /**
+     * Construct an instance from the required parameters.
+     *
+     * You must use named parameters to construct any parameters with a default value.
+     */
+    public static function with(
+        ?int $pageNumber = null,
+        ?int $pageSize = null
+    ): self {
+        $obj = new self;
+
+        null !== $pageNumber && $obj->pageNumber = $pageNumber;
+        null !== $pageSize && $obj->pageSize = $pageSize;
+
+        return $obj;
+    }
+
+    /**
+     * Page number (default = 0).
+     */
+    public function withPageNumber(int $pageNumber): self
+    {
+        $obj = clone $this;
+        $obj->pageNumber = $pageNumber;
+
+        return $obj;
+    }
+
+    /**
+     * Page size (default = 10, max = 100).
+     */
+    public function withPageSize(int $pageSize): self
+    {
+        $obj = clone $this;
+        $obj->pageSize = $pageSize;
+
+        return $obj;
+    }
+}

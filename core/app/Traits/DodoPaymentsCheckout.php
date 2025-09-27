@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Http;
+use DodoPayments\Client;
 
 use function GuzzleHttp\json_decode;
 
@@ -100,57 +101,86 @@ trait DodoPaymentsCheckout
             $billingAddress = Session::get('billing_address');
             $shippingAddress = Session::get('shipping_address');
             
-            // Create payment request
-            $paymentData = [
-                'billing' => [
-                    'city' => $billingAddress['bill_city'] ?? 'City',
-                    'country' => $billingAddress['bill_country'] ?? 'US',
-                    'state' => $billingAddress['bill_state'] ?? 'State',
-                    'street' => $billingAddress['bill_address'] ?? 'Street',
-                    'zipcode' => $billingAddress['bill_zip'] ?? '12345'
-                ],
-                'customer' => [
-                    'customer_id' => isset($user) ? $user->id : 'guest_' . time(),
-                    'email' => $shippingAddress['ship_email'] ?? $billingAddress['bill_email'],
-                    'name' => $shippingAddress['ship_first_name'] . ' ' . $shippingAddress['ship_last_name']
-                ],
-                'product_cart' => [
-                    [
-                        'product_id' => 'omnimart_order_' . time(),
-                        'quantity' => 1,
-                        'name' => $setting->title . ' Order',
-                        'price' => $total_amount,
-                        'currency' => 'USD'
-                    ]
-                ],
-                'success_url' => route('front.checkout.redirect'),
-                'cancel_url' => route('front.checkout.cancle'),
-                'webhook_url' => route('front.checkout.dodopayments.webhook')
+            // Store order data in session for later processing
+            Session::put('order_data', $orderData);
+            Session::put('order_input_data', $data);
+            Session::put('dodopayments_order_id', $orderData['transaction_number']);
+            
+            // Initialize DodoPayments client
+            $client = new Client($apiKey);
+            
+            // Prepare parameters for DodoPayments SDK
+            $billing = [
+                'city' => $billingAddress['bill_city'] ?? 'City',
+                'country' => $billingAddress['bill_country'] ?? 'US',
+                'state' => $billingAddress['bill_state'] ?? 'State',
+                'street' => $billingAddress['bill_address'] ?? 'Street',
+                'zipcode' => $billingAddress['bill_zip'] ?? '12345'
             ];
-
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-                'Content-Type' => 'application/json'
-            ])->post('https://api.dodopayments.com/v1/payments', $paymentData);
-
-            if ($response->successful()) {
-                $responseData = $response->json();
-                
-                Session::put('order_data', $orderData);
-                Session::put('order_input_data', $data);
-                Session::put('dodopayments_payment_id', $responseData['payment_id']);
-                
+            
+            $customer = [
+                'customer_id' => isset($user) ? $user->id : 'guest_' . time(),
+                'email' => $shippingAddress['ship_email'] ?? $billingAddress['bill_email'] ?? '',
+                'name' => ($shippingAddress['ship_first_name'] ?? '') . ' ' . ($shippingAddress['ship_last_name'] ?? '')
+            ];
+            
+            $productCart = [
+                [
+                    'product_id' => $orderData['transaction_number'],
+                    'quantity' => 1,
+                    'name' => $setting->title . ' Order',
+                    'price' => $total_amount,
+                    'currency' => 'USD'
+                ]
+            ];
+            
+            $metadata = [
+                'order_id' => $orderData['transaction_number'],
+                'user_id' => $orderData['user_id']
+            ];
+            
+            $returnURL = route('front.checkout.redirect');
+            
+            // Create payment using the official SDK with correct parameters
+            $payment = $client->payments->create(
+                $billing,
+                $customer,
+                $productCart,
+                null, // allowedPaymentMethodTypes
+                null, // billingCurrency
+                null, // discountCode
+                $metadata,
+                null, // paymentLink
+                $returnURL,
+                null, // showSavedPaymentMethods
+                null  // taxID
+            );
+            
+            \Log::info('DodoPayments payment created successfully', [
+                'payment_id' => $payment->payment_id ?? 'unknown',
+                'order_id' => $orderData['transaction_number']
+            ]);
+            
+            if (isset($payment->payment_url)) {
                 return [
                     'status' => true,
-                    'link' => $responseData['payment_url']
+                    'link' => $payment->payment_url
                 ];
             } else {
+                \Log::error('DodoPayments payment created but no payment_url returned', [
+                    'payment_object' => $payment
+                ]);
                 return [
                     'status' => false,
-                    'message' => 'Failed to create payment: ' . $response->body()
+                    'message' => 'Payment created but no checkout URL received'
                 ];
             }
+            
         } catch (\Exception $e) {
+            \Log::error('DodoPayments Exception', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return [
                 'status' => false,
                 'message' => $e->getMessage()
@@ -163,146 +193,187 @@ trait DodoPaymentsCheckout
         try {
             $webhookSecret = Config::get('services.dodopayments.webhook_secret');
             
-            // Verify webhook signature
-            $signature = request()->header('DodoPayments-Signature');
-            $payload = request()->getContent();
-            
-            $expectedSignature = hash_hmac('sha256', $payload, $webhookSecret);
-            
-            if (!hash_equals($signature, $expectedSignature)) {
-                return [
-                    'status' => false,
-                    'message' => 'Invalid webhook signature'
-                ];
-            }
-            
-            $webhookData = json_decode($payload, true);
-            
-            if ($webhookData['event'] === 'payment.completed' && $webhookData['data']['status'] === 'completed') {
-                $paymentId = $webhookData['data']['payment_id'];
+            // Check if this is a webhook or redirect
+            if (request()->isMethod('post')) {
+                // Webhook handling
+                $signature = request()->header('DodoPayments-Signature');
+                $payload = request()->getContent();
                 
-                // Verify this is our payment
-                if (Session::get('dodopayments_payment_id') !== $paymentId) {
+                if ($webhookSecret) {
+                    $expectedSignature = hash_hmac('sha256', $payload, $webhookSecret);
+                    
+                    if (!hash_equals($signature, $expectedSignature)) {
+                        \Log::warning('DodoPayments webhook signature mismatch');
+                        return [
+                            'status' => false,
+                            'message' => 'Invalid webhook signature'
+                        ];
+                    }
+                }
+                
+                $webhookData = json_decode($payload, true);
+                
+                // Handle different webhook events according to DodoPayments API
+                if (isset($webhookData['event'])) {
+                    if ($webhookData['event'] === 'payment.completed' || $webhookData['event'] === 'payment.succeeded') {
+                        $orderId = $webhookData['data']['metadata']['order_id'] ?? $webhookData['data']['id'] ?? null;
+                        
+                        // Verify this is our order
+                        if (Session::get('dodopayments_order_id') !== $orderId) {
+                            \Log::warning('DodoPayments webhook order ID mismatch', [
+                                'expected' => Session::get('dodopayments_order_id'),
+                                'received' => $orderId,
+                                'webhook_data' => $webhookData
+                            ]);
+                            return [
+                                'status' => false,
+                                'message' => 'Order ID mismatch'
+                            ];
+                        }
+                    } else {
+                        \Log::info('DodoPayments webhook received non-payment event', [
+                            'event' => $webhookData['event'],
+                            'data' => $webhookData['data'] ?? null
+                        ]);
+                        return [
+                            'status' => false,
+                            'message' => 'Non-payment webhook event received'
+                        ];
+                    }
+                }
+            } else {
+                // Redirect handling - check query parameters
+                $paymentId = request()->get('payment_id');
+                $status = request()->get('status');
+                
+                if ($status === 'success' && $paymentId) {
+                    // For redirects, we'll process the order since DodoPayments redirected successfully
+                    \Log::info('DodoPayments redirect success', [
+                        'payment_id' => $paymentId,
+                        'status' => $status
+                    ]);
+                } else {
+                    \Log::warning('DodoPayments redirect with missing parameters', [
+                        'payment_id' => $paymentId,
+                        'status' => $status,
+                        'all_params' => request()->all()
+                    ]);
                     return [
                         'status' => false,
-                        'message' => 'Payment ID mismatch'
+                        'message' => 'Payment not completed or missing parameters'
                     ];
                 }
-                
-                $cart = Session::get('cart');
-                $user = Auth::user();
-                $total_tax = 0;
-                $cart_total = 0;
-                $total = 0;
-                $option_price = 0;
-
-                foreach ($cart as $key => $items) {
-                    $total += $items['main_price'] * $items['qty'];
-                    $option_price += $items['attribute_price'];
-                    $cart_total = $total + $option_price;
-                    $item = Item::findOrFail($key);
-                    if ($item->tax) {
-                        $total_tax += $item::taxCalculate($item) * $items['qty'];
-                    }
-                }
-
-                $order_input_data = Session::get('order_input_data');
-                if (!PriceHelper::Digital()) {
-                    $shipping = null;
-                } else {
-                    $shipping = ShippingService::findOrFail($order_input_data['shipping_id']);
-                }
-                $discount = [];
-                if (Session::has('coupon')) {
-                    $discount = Session::get('coupon');
-                }
-
-                $grand_total = ($cart_total + ($shipping ? $shipping->price : 0)) + $total_tax;
-                $grand_total = $grand_total - ($discount ? $discount['discount'] : 0);
-                $grand_total += PriceHelper::StatePrce($order_input_data['state_id'], $cart_total);
-
-                $total_amount = PriceHelper::setConvertPrice($grand_total);
-
-                $orderData = Session::get('order_data');
-                $orderData['txnid'] = $paymentId;
-                $orderData['payment_status'] = 'Paid';
-
-                $order = Order::create($orderData);
-
-                $new_txn = 'ORD-' . str_pad(Carbon::now()->format('Ymd'), 4, '0000', STR_PAD_LEFT) . '-' . $order->id;
-                $order->transaction_number = $new_txn;
-                $order->save();
-
-                PriceHelper::Transaction($order->id, $order->transaction_number, EmailHelper::getEmail(), PriceHelper::OrderTotal($order, 'trns'));
-                PriceHelper::LicenseQtyDecrese($cart);
-                PriceHelper::LicenseQtyDecrese($cart);
-
-                if (Session::has('copon')) {
-                    $code = PromoCode::find(Session::get('copon')['code']['id']);
-                    $code->no_of_times--;
-                    $code->update();
-                }
-
-                if ($discount) {
-                    $coupon_id = $discount['code']['id'];
-                    $get_coupon = PromoCode::findOrFail($coupon_id);
-                    $get_coupon->no_of_times -= 1;
-                    $get_coupon->update();
-                }
-
-                TrackOrder::create([
-                    'title' => 'Pending',
-                    'order_id' => $order->id,
-                ]);
-
-                Notification::create([
-                    'order_id' => $order->id
-                ]);
-
-                $setting = Setting::first();
-                if ($setting->is_twilio == 1) {
-                    // message
-                    $sms = new SmsHelper();
-                    $user_number = json_decode($order->billing_info, true)['bill_phone'];
-                    if ($user_number) {
-                        $sms->SendSms($user_number, "'purchase'", $order->transaction_number);
-                    }
-                }
-
-                $emailData = [
-                    'to' => EmailHelper::getEmail(),
-                    'type' => "Order",
-                    'user_name' => isset($user) ? $user->displayName() : Session::get('billing_address')['bill_first_name'],
-                    'order_cost' => $total_amount,
-                    'transaction_number' => $order->transaction_number,
-                    'site_title' => Setting::first()->title,
-                ];
-
-                $setting = Setting::first();
-                if ($setting->is_queue_enabled == 1) {
-                    dispatch(new EmailSendJob($emailData, "template"));
-                } else {
-                    $email = new EmailHelper();
-                    $email->sendTemplateMail($emailData, "template");
-                }
-                
-                Session::put('order_id', $order->id);
-                Session::forget('cart');
-                Session::forget('discount');
-                Session::forget('order_data');
-                Session::forget('order_payment_id');
-                Session::forget('coupon');
-                Session::forget('dodopayments_payment_id');
-                
-                return [
-                    'status' => true
-                ];
-            } else {
-                return [
-                    'status' => false,
-                    'message' => 'Payment not completed'
-                ];
             }
+            
+            // Process the order since payment was successful
+            $cart = Session::get('cart');
+            $user = Auth::user();
+            $total_tax = 0;
+            $cart_total = 0;
+            $total = 0;
+            $option_price = 0;
+
+            foreach ($cart as $key => $items) {
+                $total += $items['main_price'] * $items['qty'];
+                $option_price += $items['attribute_price'];
+                $cart_total = $total + $option_price;
+                $item = Item::findOrFail($key);
+                if ($item->tax) {
+                    $total_tax += $item::taxCalculate($item) * $items['qty'];
+                }
+            }
+
+            $order_input_data = Session::get('order_input_data');
+            if (!PriceHelper::Digital()) {
+                $shipping = null;
+            } else {
+                $shipping = ShippingService::findOrFail($order_input_data['shipping_id']);
+            }
+            $discount = [];
+            if (Session::has('coupon')) {
+                $discount = Session::get('coupon');
+            }
+
+            $grand_total = ($cart_total + ($shipping ? $shipping->price : 0)) + $total_tax;
+            $grand_total = $grand_total - ($discount ? $discount['discount'] : 0);
+            $grand_total += PriceHelper::StatePrce($order_input_data['state_id'], $cart_total);
+
+            $total_amount = PriceHelper::setConvertPrice($grand_total);
+
+            $orderData = Session::get('order_data');
+            $orderData['txnid'] = $paymentId ?? 'dodopayments_' . time();
+            $orderData['payment_status'] = 'Paid';
+
+            $order = Order::create($orderData);
+
+            $new_txn = 'ORD-' . str_pad(Carbon::now()->format('Ymd'), 4, '0000', STR_PAD_LEFT) . '-' . $order->id;
+            $order->transaction_number = $new_txn;
+            $order->save();
+
+            PriceHelper::Transaction($order->id, $order->transaction_number, EmailHelper::getEmail(), PriceHelper::OrderTotal($order, 'trns'));
+            PriceHelper::LicenseQtyDecrese($cart);
+            PriceHelper::LicenseQtyDecrese($cart);
+
+            if (Session::has('copon')) {
+                $code = PromoCode::find(Session::get('copon')['code']['id']);
+                $code->no_of_times--;
+                $code->update();
+            }
+
+            if ($discount) {
+                $coupon_id = $discount['code']['id'];
+                $get_coupon = PromoCode::findOrFail($coupon_id);
+                $get_coupon->no_of_times -= 1;
+                $get_coupon->update();
+            }
+
+            TrackOrder::create([
+                'title' => 'Pending',
+                'order_id' => $order->id,
+            ]);
+
+            Notification::create([
+                'order_id' => $order->id
+            ]);
+
+            $setting = Setting::first();
+            if ($setting->is_twilio == 1) {
+                // message
+                $sms = new SmsHelper();
+                $user_number = json_decode($order->billing_info, true)['bill_phone'];
+                if ($user_number) {
+                    $sms->SendSms($user_number, "'purchase'", $order->transaction_number);
+                }
+            }
+
+            $emailData = [
+                'to' => EmailHelper::getEmail(),
+                'type' => "Order",
+                'user_name' => isset($user) ? $user->displayName() : Session::get('billing_address')['bill_first_name'],
+                'order_cost' => $total_amount,
+                'transaction_number' => $order->transaction_number,
+                'site_title' => Setting::first()->title,
+            ];
+
+            $setting = Setting::first();
+            if ($setting->is_queue_enabled == 1) {
+                dispatch(new EmailSendJob($emailData, "template"));
+            } else {
+                $email = new EmailHelper();
+                $email->sendTemplateMail($emailData, "template");
+            }
+            
+            Session::put('order_id', $order->id);
+            Session::forget('cart');
+            Session::forget('discount');
+            Session::forget('order_data');
+            Session::forget('order_payment_id');
+            Session::forget('coupon');
+            Session::forget('dodopayments_payment_id');
+            
+            return [
+                'status' => true
+            ];
         } catch (\Exception $e) {
             return [
                 'status' => false,

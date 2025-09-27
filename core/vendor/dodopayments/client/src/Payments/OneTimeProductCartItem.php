@@ -1,0 +1,102 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Dodopayments\Payments;
+
+use Dodopayments\Core\Attributes\Api;
+use Dodopayments\Core\Concerns\SdkModel;
+use Dodopayments\Core\Contracts\BaseModel;
+
+/**
+ * @phpstan-type one_time_product_cart_item = array{
+ *   productID: string, quantity: int, amount?: int|null
+ * }
+ */
+final class OneTimeProductCartItem implements BaseModel
+{
+    /** @use SdkModel<one_time_product_cart_item> */
+    use SdkModel;
+
+    #[Api('product_id')]
+    public string $productID;
+
+    #[Api]
+    public int $quantity;
+
+    /**
+     * Amount the customer pays if pay_what_you_want is enabled. If disabled then amount will be ignored
+     * Represented in the lowest denomination of the currency (e.g., cents for USD).
+     * For example, to charge $1.00, pass `100`.
+     */
+    #[Api(nullable: true, optional: true)]
+    public ?int $amount;
+
+    /**
+     * `new OneTimeProductCartItem()` is missing required properties by the API.
+     *
+     * To enforce required parameters use
+     * ```
+     * OneTimeProductCartItem::with(productID: ..., quantity: ...)
+     * ```
+     *
+     * Otherwise ensure the following setters are called
+     *
+     * ```
+     * (new OneTimeProductCartItem)->withProductID(...)->withQuantity(...)
+     * ```
+     */
+    public function __construct()
+    {
+        $this->initialize();
+    }
+
+    /**
+     * Construct an instance from the required parameters.
+     *
+     * You must use named parameters to construct any parameters with a default value.
+     */
+    public static function with(
+        string $productID,
+        int $quantity,
+        ?int $amount = null
+    ): self {
+        $obj = new self;
+
+        $obj->productID = $productID;
+        $obj->quantity = $quantity;
+
+        null !== $amount && $obj->amount = $amount;
+
+        return $obj;
+    }
+
+    public function withProductID(string $productID): self
+    {
+        $obj = clone $this;
+        $obj->productID = $productID;
+
+        return $obj;
+    }
+
+    public function withQuantity(int $quantity): self
+    {
+        $obj = clone $this;
+        $obj->quantity = $quantity;
+
+        return $obj;
+    }
+
+    /**
+     * Amount the customer pays if pay_what_you_want is enabled. If disabled then amount will be ignored
+     * Represented in the lowest denomination of the currency (e.g., cents for USD).
+     * For example, to charge $1.00, pass `100`.
+     */
+    public function withAmount(?int $amount): self
+    {
+        $obj = clone $this;
+        $obj->amount = $amount;
+
+        return $obj;
+    }
+}
