@@ -107,8 +107,7 @@ trait DodoPaymentsCheckout
             Session::put('dodopayments_order_id', $orderData['transaction_number']);
             
             // For localhost development, create a mock payment
-            // Temporarily comment this out to test real API on localhost
-            if (false && (app()->environment('local') || str_contains(request()->getHost(), 'localhost'))) {
+            if (app()->environment('local') || str_contains(request()->getHost(), 'localhost')) {
                 \Log::info('DodoPayments: Using localhost mock payment');
                 
                 $mockPaymentId = 'mock_payment_' . time() . '_' . $orderData['transaction_number'];
@@ -122,11 +121,8 @@ trait DodoPaymentsCheckout
                 ];
             }
             
-            // Initialize DodoPayments client with timeout
-            $client = new Client($apiKey, [
-                'timeout' => 30,
-                'connect_timeout' => 10
-            ]);
+            // Initialize DodoPayments client
+            $client = new Client($apiKey);
             
             // Prepare parameters for DodoPayments SDK
             $billing = [
@@ -160,6 +156,10 @@ trait DodoPaymentsCheckout
             
             $returnURL = route('front.checkout.redirect');
             
+            // Create RequestOptions with timeout
+            $requestOptions = new \Dodopayments\RequestOptions();
+            $requestOptions->timeout = 30; // 30 seconds timeout
+            
             // Create payment using the official SDK with correct parameters
             $payment = $client->payments->create(
                 $billing,
@@ -172,7 +172,8 @@ trait DodoPaymentsCheckout
                 null, // paymentLink
                 $returnURL,
                 null, // showSavedPaymentMethods
-                null  // taxID
+                null, // taxID
+                $requestOptions // RequestOptions with timeout
             );
             
             \Log::info('DodoPayments payment created successfully', [
