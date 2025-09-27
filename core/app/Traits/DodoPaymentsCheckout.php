@@ -190,7 +190,7 @@ trait DodoPaymentsCheckout
             
             $productCart = [
                 [
-                    'product_id' => $orderData['transaction_number'],
+                    'product_id' => 'generic_order_' . time(),  // Use a generic product ID
                     'quantity' => 1,  // Keep as integer (u32)
                     'name' => $setting->title . ' Order',
                     'price' => (int) round($total_amount * 100),  // Convert to cents (integer)
@@ -236,36 +236,52 @@ trait DodoPaymentsCheckout
                     try {
                         \Log::info('DodoPayments: Trying endpoint', ['endpoint' => $endpoint]);
                         
-                        // Try minimal payload first
-                        $payload = [
-                            'billing' => $billing,
-                            'customer' => $customer,
-                            'product_cart' => $productCart,
-                            'return_url' => $returnURL
+                        // Try different payload structures
+                        $payloads = [
+                            // Minimal payload with product_cart
+                            [
+                                'billing' => $billing,
+                                'customer' => $customer,
+                                'product_cart' => $productCart,
+                                'return_url' => $returnURL
+                            ],
+                            // Alternative payload structure
+                            [
+                                'amount' => (int) round($total_amount * 100),
+                                'currency' => 'USD',
+                                'customer' => $customer,
+                                'billing' => $billing,
+                                'return_url' => $returnURL
+                            ]
                         ];
                         
-                        \Log::info('DodoPayments: Payload being sent', [
-                            'payload' => $payload
-                        ]);
+                        foreach ($payloads as $index => $payload) {
+                            \Log::info('DodoPayments: Trying payload structure ' . ($index + 1), [
+                                'payload' => $payload
+                            ]);
+                            
+                            $response = \Http::timeout(30)
+                                ->withHeaders([
+                                    'Authorization' => 'Bearer ' . $apiKey,
+                                    'Content-Type' => 'application/json',
+                                    'Accept' => 'application/json'
+                                ])
+                                ->post($endpoint, $payload);
+                            
+                            \Log::info('DodoPayments: Payload response', [
+                                'payload_index' => $index + 1,
+                                'status' => $response->status(),
+                                'response_body' => $response->body()
+                            ]);
+                            
+                            if ($response->status() !== 404) {
+                                $usedEndpoint = $endpoint;
+                                break 2; // Break out of both loops
+                            }
+                        }
                         
-                        $response = \Http::timeout(30)
-                            ->withHeaders([
-                                'Authorization' => 'Bearer ' . $apiKey,
-                                'Content-Type' => 'application/json',
-                                'Accept' => 'application/json'
-                            ])
-                            ->post($endpoint, $payload);
-                        
-                        \Log::info('DodoPayments: Endpoint response', [
-                            'endpoint' => $endpoint,
-                            'status' => $response->status(),
-                            'response_size' => strlen($response->body()),
-                            'response_body' => $response->body()
-                        ]);
-                        
-                        if ($response->status() !== 404) {
-                            $usedEndpoint = $endpoint;
-                            break;
+                        if ($response->status() === 404) {
+                            continue; // Try next endpoint
                         }
                         
                     } catch (\Exception $e) {
