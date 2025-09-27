@@ -137,6 +137,20 @@ trait DodoPaymentsCheckout
             $client = new Client($apiKey);
             \Log::info('DodoPayments: Client initialized successfully');
             
+            // Test basic connectivity to DodoPayments API
+            try {
+                \Log::info('DodoPayments: Testing API connectivity');
+                $testResponse = \Http::timeout(10)->get('https://live.dodopayments.com/api/v1/health');
+                \Log::info('DodoPayments: API connectivity test completed', [
+                    'status' => $testResponse->status(),
+                    'response_length' => strlen($testResponse->body())
+                ]);
+            } catch (\Exception $e) {
+                \Log::warning('DodoPayments: API connectivity test failed', [
+                    'message' => $e->getMessage()
+                ]);
+            }
+            
             // Prepare parameters for DodoPayments SDK
             $billing = [
                 'city' => $billingAddress['bill_city'] ?? 'City',
@@ -187,6 +201,11 @@ trait DodoPaymentsCheckout
             // Create payment using the official SDK with correct parameters
             try {
                 \Log::info('DodoPayments: Calling payments->create()');
+                
+                // Set a maximum execution time for this specific operation
+                $startTime = microtime(true);
+                set_time_limit(60); // Allow up to 60 seconds for this operation
+                
                 $payment = $client->payments->create(
                     $billing,
                     $customer,
@@ -201,9 +220,14 @@ trait DodoPaymentsCheckout
                     null, // taxID
                     $requestOptions // RequestOptions with timeout
                 );
+                
+                $endTime = microtime(true);
+                $executionTime = round(($endTime - $startTime) * 1000, 2); // Convert to milliseconds
+                
                 \Log::info('DodoPayments: payments->create() completed', [
                     'payment_object' => $payment ? 'received' : 'null',
-                    'payment_id' => $payment->payment_id ?? 'no_payment_id'
+                    'payment_id' => $payment->payment_id ?? 'no_payment_id',
+                    'execution_time_ms' => $executionTime
                 ]);
             } catch (\GuzzleHttp\Exception\ConnectException $e) {
                 \Log::error('DodoPayments: Connection timeout', [
