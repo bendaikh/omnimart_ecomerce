@@ -253,44 +253,95 @@ trait DodoPaymentsCheckout
             try {
                 \Log::info('DodoPayments: Using Checkout Sessions approach');
                 
-                // First, we need to create a product in the dashboard or via API
-                // Let's try to create a simple product first
-                $productData = [
-                    'name' => $setting->title . ' Order',
-                    'price' => [
-                        'amount' => (int) round($total_amount * 100),
-                        'currency' => 'USD',
-                        'type' => 'one_time_price'
+                // Use the official DodoPayments API structure from documentation
+                $productStructures = [
+                    // Structure 1: Official API structure with all required fields
+                    [
+                        'name' => $setting->title . ' Order',
+                        'description' => 'Order from ' . $setting->title,
+                        'price' => [
+                            'currency' => 'USD',
+                            'price' => (int) round($total_amount * 100),
+                            'type' => 'one_time_price',
+                            'discount' => 0,
+                            'purchasing_power_parity' => true
+                        ],
+                        'tax_category' => 'digital_products'
+                    ],
+                    // Structure 2: Simplified version
+                    [
+                        'name' => $setting->title . ' Order',
+                        'price' => [
+                            'currency' => 'USD',
+                            'price' => (int) round($total_amount * 100),
+                            'type' => 'one_time_price'
+                        ],
+                        'tax_category' => 'digital_products'
+                    ],
+                    // Structure 3: With saas tax category
+                    [
+                        'name' => $setting->title . ' Order',
+                        'price' => [
+                            'currency' => 'USD',
+                            'price' => (int) round($total_amount * 100),
+                            'type' => 'one_time_price'
+                        ],
+                        'tax_category' => 'saas'
+                    ],
+                    // Structure 4: With e_book tax category
+                    [
+                        'name' => $setting->title . ' Order',
+                        'price' => [
+                            'currency' => 'USD',
+                            'price' => (int) round($total_amount * 100),
+                            'type' => 'one_time_price'
+                        ],
+                        'tax_category' => 'e_book'
                     ]
                 ];
                 
-                \Log::info('DodoPayments: Creating product for checkout session', ['product_data' => $productData]);
-                
-                $productResponse = \Http::timeout(30)
-                    ->withHeaders([
-                        'Authorization' => 'Bearer ' . $apiKey,
-                        'Content-Type' => 'application/json',
-                        'Accept' => 'application/json'
-                    ])
-                    ->post($baseUrl . '/products', $productData);
-                
-                \Log::info('DodoPayments: Product creation response', [
-                    'status' => $productResponse->status(),
-                    'response_body' => $productResponse->body()
-                ]);
-                
+                $productCreated = false;
                 $productId = null;
-                if ($productResponse->successful()) {
-                    $productResult = $productResponse->json();
-                    $productId = $productResult['id'] ?? $productResult['product_id'] ?? null;
+                
+                foreach ($productStructures as $index => $productData) {
+                try {
+                        \Log::info('DodoPayments: Trying product structure ' . ($index + 1), ['product_data' => $productData]);
+                        
+                    $productResponse = \Http::timeout(30)
+                        ->withHeaders([
+                            'Authorization' => 'Bearer ' . $apiKey,
+                            'Content-Type' => 'application/json',
+                            'Accept' => 'application/json'
+                        ])
+                        ->post($baseUrl . '/products', $productData);
                     
-                    if ($productId) {
-                        \Log::info('DodoPayments: Product created successfully', ['product_id' => $productId]);
+                        \Log::info('DodoPayments: Product creation response ' . ($index + 1), [
+                        'status' => $productResponse->status(),
+                        'response_body' => $productResponse->body()
+                    ]);
+                    
+                    if ($productResponse->successful()) {
+                        $productResult = $productResponse->json();
+                        $productId = $productResult['id'] ?? $productResult['product_id'] ?? null;
+                        
+                        if ($productId) {
+                                \Log::info('DodoPayments: Product created successfully with structure ' . ($index + 1), [
+                                'product_id' => $productId
+                            ]);
+                            
+                                $productCreated = true;
+                                break; // Exit the loop since we successfully created a product
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning('DodoPayments: Product structure ' . ($index + 1) . ' failed', [
+                            'error' => $e->getMessage()
+                        ]);
                     }
                 }
                 
-                if (!$productId) {
-                    \Log::warning('DodoPayments: Product creation failed, trying alternative approach');
+                if (!$productCreated || !$productId) {
+                    \Log::warning('DodoPayments: All product creation structures failed');
                     throw new \Exception('Product creation failed');
                 }
                 
@@ -379,22 +430,22 @@ trait DodoPaymentsCheckout
                     // Try to create a simple payment without product_cart
                     $paymentPayload = [
                         'payment_link' => true,
-                        'amount' => (int) round($total_amount * 100),
-                        'currency' => 'USD',
+                            'amount' => (int) round($total_amount * 100),
+                            'currency' => 'USD',
                         'billing' => $billing,
-                        'customer' => $customer,
-                        'return_url' => $returnURL,
-                        'metadata' => $metadata
-                    ];
-                    
+                            'customer' => $customer,
+                            'return_url' => $returnURL,
+                            'metadata' => $metadata
+                        ];
+                        
                     \Log::info('DodoPayments: Trying payment without product_cart', ['payload' => $paymentPayload]);
-                    
+                            
                     $simpleResponse = \Http::timeout(30)
-                        ->withHeaders([
-                            'Authorization' => 'Bearer ' . $apiKey,
-                            'Content-Type' => 'application/json',
-                            'Accept' => 'application/json'
-                        ])
+                                ->withHeaders([
+                                    'Authorization' => 'Bearer ' . $apiKey,
+                                    'Content-Type' => 'application/json',
+                                    'Accept' => 'application/json'
+                                ])
                         ->post($baseUrl . '/payments', $paymentPayload);
                     
                     \Log::info('DodoPayments: Simple payment response', [
