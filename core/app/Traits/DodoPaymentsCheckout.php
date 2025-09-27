@@ -157,6 +157,22 @@ trait DodoPaymentsCheckout
                 ]);
             }
             
+            // Test the correct payments endpoint
+            try {
+                \Log::info('DodoPayments: Testing payments endpoint');
+                $paymentsResponse = \Http::timeout(5)->get($baseUrl . '/payments');
+                \Log::info('DodoPayments: Payments endpoint test', [
+                    'endpoint' => $baseUrl . '/payments',
+                    'status' => $paymentsResponse->status(),
+                    'response_preview' => substr($paymentsResponse->body(), 0, 200)
+                ]);
+            } catch (\Exception $e) {
+                \Log::warning('DodoPayments: Payments endpoint test failed', [
+                    'endpoint' => $baseUrl . '/payments',
+                    'error' => $e->getMessage()
+                ]);
+            }
+            
             // Prepare parameters for DodoPayments SDK
             $billing = [
                 'city' => $billingAddress['bill_city'] ?? 'City',
@@ -208,11 +224,9 @@ trait DodoPaymentsCheckout
             try {
                 \Log::info('DodoPayments: Testing direct HTTP API call');
                 
-                // Try multiple endpoints based on documentation
+                // Use correct endpoints based on DodoPayments documentation
                 $endpoints = [
-                    $baseUrl . '/api/v1/payment',
-                    $baseUrl . '/api/v1/payments', 
-                    $baseUrl . '/api/v1/checkout-session'
+                    $baseUrl . '/payments',  // Correct endpoint for one-time payments
                 ];
                 
                 $response = null;
