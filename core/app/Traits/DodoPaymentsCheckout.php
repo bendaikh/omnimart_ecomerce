@@ -133,7 +133,9 @@ trait DodoPaymentsCheckout
             }
             
             // Initialize DodoPayments client
+            \Log::info('DodoPayments: Initializing client with API key');
             $client = new Client($apiKey);
+            \Log::info('DodoPayments: Client initialized successfully');
             
             // Prepare parameters for DodoPayments SDK
             $billing = [
@@ -184,6 +186,7 @@ trait DodoPaymentsCheckout
             
             // Create payment using the official SDK with correct parameters
             try {
+                \Log::info('DodoPayments: Calling payments->create()');
                 $payment = $client->payments->create(
                     $billing,
                     $customer,
@@ -198,18 +201,32 @@ trait DodoPaymentsCheckout
                     null, // taxID
                     $requestOptions // RequestOptions with timeout
                 );
+                \Log::info('DodoPayments: payments->create() completed', [
+                    'payment_object' => $payment ? 'received' : 'null',
+                    'payment_id' => $payment->payment_id ?? 'no_payment_id'
+                ]);
             } catch (\GuzzleHttp\Exception\ConnectException $e) {
                 \Log::error('DodoPayments: Connection timeout', [
                     'message' => $e->getMessage(),
-                    'timeout' => $requestOptions->timeout
+                    'timeout' => $requestOptions->timeout,
+                    'trace' => $e->getTraceAsString()
                 ]);
                 throw new \Exception('Connection to DodoPayments timed out. Please try again.');
             } catch (\GuzzleHttp\Exception\RequestException $e) {
                 \Log::error('DodoPayments: Request failed', [
                     'message' => $e->getMessage(),
-                    'response' => $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : 'No response'
+                    'response' => $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : 'No response',
+                    'status_code' => $e->hasResponse() ? $e->getResponse()->getStatusCode() : 'no_status',
+                    'trace' => $e->getTraceAsString()
                 ]);
                 throw new \Exception('DodoPayments request failed: ' . $e->getMessage());
+            } catch (\Exception $e) {
+                \Log::error('DodoPayments: General exception during payment creation', [
+                    'message' => $e->getMessage(),
+                    'class' => get_class($e),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e;
             }
             
             \Log::info('DodoPayments payment created successfully', [
