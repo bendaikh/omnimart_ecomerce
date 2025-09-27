@@ -210,8 +210,8 @@ trait DodoPaymentsCheckout
             
             $customer = [
                 'customer_id' => isset($user) ? (string) $user->id : 'guest_' . time(),
-                'email' => $shippingAddress['ship_email'] ?? $billingAddress['bill_email'] ?? '',
-                'name' => ($shippingAddress['ship_first_name'] ?? '') . ' ' . ($shippingAddress['ship_last_name'] ?? '')
+                'email' => $billingAddress['bill_email'] ?? $shippingAddress['ship_email'] ?? '',
+                'name' => ($billingAddress['bill_first_name'] ?? '') . ' ' . ($billingAddress['bill_last_name'] ?? '')
             ];
             
             $productCart = [
@@ -221,7 +221,8 @@ trait DodoPaymentsCheckout
                     'name' => $setting->title . ' Order',
                     'price' => [
                         'amount' => (int) round($total_amount * 100),  // Convert to cents (integer)
-                        'currency' => 'USD'
+                        'currency' => 'USD',
+                        'type' => 'one_time'
                     ]
                 ]
             ];
@@ -259,7 +260,8 @@ trait DodoPaymentsCheckout
                     'name' => $setting->title . ' Order',
                     'price' => [
                         'amount' => (int) round($total_amount * 100),
-                        'currency' => 'USD'
+                        'currency' => 'USD',
+                        'type' => 'one_time'
                     ],
                     'type' => 'one_time'
                 ];
@@ -296,7 +298,8 @@ trait DodoPaymentsCheckout
                                     'name' => $setting->title . ' Order',
                                     'price' => [
                                         'amount' => (int) round($total_amount * 100),
-                                        'currency' => 'USD'
+                                        'currency' => 'USD',
+                                        'type' => 'one_time'
                                     ]
                                 ]
                             ];
@@ -350,6 +353,7 @@ trait DodoPaymentsCheckout
                             'currency' => 'USD',
                             'customer' => $customer,
                             'billing' => $billing,
+                            'product_cart' => $productCart,
                             'return_url' => $returnURL,
                             'metadata' => $metadata
                         ];
@@ -505,6 +509,7 @@ trait DodoPaymentsCheckout
                         'currency' => 'USD',
                         'customer' => $customer,
                         'billing' => $billing,
+                        'product_cart' => $productCart,
                         'return_url' => $returnURL,
                         'metadata' => $metadata
                     ];
