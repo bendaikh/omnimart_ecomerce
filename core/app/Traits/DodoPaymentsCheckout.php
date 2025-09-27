@@ -564,9 +564,22 @@ trait DodoPaymentsCheckout
                 'api_key' => substr($apiKey, 0, 10) . '...',
                 'environment' => app()->environment()
             ]);
+            
+            // Provide user-friendly error messages
+            $errorMessage = 'Payment initialization failed';
+            if (str_contains($e->getMessage(), 'Connection') || str_contains($e->getMessage(), 'timeout')) {
+                $errorMessage = 'Unable to connect to payment service. Please check your internet connection and try again.';
+            } elseif (str_contains($e->getMessage(), 'API key') || str_contains($e->getMessage(), 'authentication')) {
+                $errorMessage = 'Payment service configuration error. Please contact support.';
+            } elseif (str_contains($e->getMessage(), 'currency') || str_contains($e->getMessage(), 'amount')) {
+                $errorMessage = 'Invalid payment amount or currency. Please try again.';
+            } else {
+                $errorMessage = 'Payment service temporarily unavailable. Please try again later.';
+            }
+            
             return [
                 'status' => false,
-                'message' => 'Payment initialization failed: ' . $e->getMessage()
+                'message' => $errorMessage
             ];
         }
     }

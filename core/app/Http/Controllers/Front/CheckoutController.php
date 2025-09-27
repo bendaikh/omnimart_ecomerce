@@ -597,7 +597,24 @@ class CheckoutController extends Controller
                 }
                 $checkout = true;
                 $payment_redirect = false; // Changed to false for overlay checkout
+                
+                // Add debugging for DodoPayments
+                \Log::info('DodoPayments: Starting payment process', [
+                    'currency' => $currency->name,
+                    'is_ajax' => request()->ajax(),
+                    'wants_json' => request()->wantsJson(),
+                    'user_agent' => request()->userAgent()
+                ]);
+                
                 $payment = $this->dodoPaymentsSubmit($input);
+                
+                \Log::info('DodoPayments: Payment result', [
+                    'status' => $payment['status'] ?? 'unknown',
+                    'message' => $payment['message'] ?? 'no message',
+                    'has_overlay_checkout' => isset($payment['overlay_checkout']),
+                    'has_payment_id' => isset($payment['payment_id'])
+                ]);
+                
                 break;
         }
 
@@ -632,11 +649,25 @@ class CheckoutController extends Controller
                     }
                     return redirect()->route('front.checkout.success');
                 } else {
+                    // Check if this is an AJAX request (for DodoPayments)
+                    if (request()->ajax() || request()->wantsJson()) {
+                        return response()->json([
+                            'status' => false,
+                            'message' => $payment['message'] ?? 'Payment failed'
+                        ], 400);
+                    }
                     Session::put('message', $payment['message']);
                     return redirect()->route('front.checkout.cancle');
                 }
             }
         } else {
+            // Check if this is an AJAX request (for DodoPayments)
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Checkout failed'
+                ], 400);
+            }
             return redirect()->route('front.checkout.cancle');
         }
     }

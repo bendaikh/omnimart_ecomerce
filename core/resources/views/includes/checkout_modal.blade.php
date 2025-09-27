@@ -830,6 +830,13 @@
                     })
                     .then(response => {
                         clearTimeout(timeoutId);
+                        
+                        // Check if response is JSON
+                        const contentType = response.headers.get('content-type');
+                        if (!contentType || !contentType.includes('application/json')) {
+                            throw new Error('Server returned non-JSON response. This usually indicates a server error.');
+                        }
+                        
                         return response.json();
                     })
                     .then(data => {
@@ -854,18 +861,21 @@
                     .catch(error => {
                         clearTimeout(timeoutId);
                         console.error('DodoPayments AJAX Error:', error);
-                        console.error('Response:', error.response);
-                        console.error('Status:', error.status);
                         
                         let errorMessage = 'An error occurred while processing payment';
                         
                         if (error.name === 'AbortError') {
                             errorMessage = 'Request timed out. Please check your connection and try again.';
-                        } else if (error.response && error.response.data && error.response.data.message) {
-                            errorMessage = error.response.data.message;
                         } else if (error.message) {
                             errorMessage = error.message;
                         }
+                        
+                        // Log additional debugging information
+                        console.error('Error details:', {
+                            name: error.name,
+                            message: error.message,
+                            stack: error.stack
+                        });
                         
                         alert('DodoPayments Error: ' + errorMessage);
                         resetButton();
