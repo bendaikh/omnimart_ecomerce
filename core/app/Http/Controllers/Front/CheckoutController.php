@@ -596,7 +596,7 @@ class CheckoutController extends Controller
                     return redirect()->back();
                 }
                 $checkout = true;
-                $payment_redirect = true;
+                $payment_redirect = false; // Changed to false for overlay checkout
                 $payment = $this->dodoPaymentsSubmit($input);
                 break;
         }
@@ -614,6 +614,22 @@ class CheckoutController extends Controller
                 }
             } else {
                 if ($payment['status']) {
+                    // Handle overlay checkout for DodoPayments
+                    if (isset($payment['overlay_checkout']) && $payment['overlay_checkout']) {
+                        $response = [
+                            'status' => true,
+                            'overlay_checkout' => true,
+                            'payment_id' => $payment['payment_id'],
+                            'api_key' => $payment['api_key']
+                        ];
+                        
+                        // Add mock_payment flag if present
+                        if (isset($payment['mock_payment'])) {
+                            $response['mock_payment'] = $payment['mock_payment'];
+                        }
+                        
+                        return response()->json($response);
+                    }
                     return redirect()->route('front.checkout.success');
                 } else {
                     Session::put('message', $payment['message']);

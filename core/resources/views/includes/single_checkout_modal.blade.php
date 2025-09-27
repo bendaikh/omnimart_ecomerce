@@ -744,7 +744,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="card-body">
-                        <form action="{{ route('front.checkout.submit') }}" method="POST">
+                        <form id="dodopayments-form" action="{{ route('front.checkout.submit') }}" method="POST">
                             @csrf
                             <input type="hidden" name="payment_method" value="DodoPayments">
                             <input type="hidden" name="shipping_id" value="" class="shipping_id_setup">
@@ -754,14 +754,19 @@
                             
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle"></i>
-                                {{ __('You will be redirected to DodoPayments secure payment page to complete your transaction.') }}
+                                {{ __('Click the button below to open the payment popup with all available payment methods.') }}
+                            </div>
+                            
+                            <!-- DodoPayments Overlay Checkout Container -->
+                            <div id="dodopayments-checkout-container" style="display: none;">
+                                <!-- Payment methods will be loaded here -->
                             </div>
                         </form>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-primary btn-sm" type="button" data-bs-dismiss="modal"><span>{{ __('Cancel') }}</span></button>
-                    <button class="btn btn-primary btn-sm" type="submit" onclick="document.querySelector('#dodopayments form').submit();"><span>{{ __('Pay with DodoPayments') }}</span></button>
+                    <button class="btn btn-primary btn-sm" type="button" id="dodopayments-pay-btn"><span>{{ __('Pay with DodoPayments') }}</span></button>
                 </div>
             </div>
         </div>
@@ -784,5 +789,194 @@
             function SP_NEED_AUTH(u){ window.location.href = u; }
         </script>
         <script src="https://spaceremit.com/api/v2/js_script/spaceremit.js"></script>
+        
+        <!-- DodoPayments Overlay Checkout Script -->
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const dodopaymentsPayBtn = document.getElementById('dodopayments-pay-btn');
+                const dodopaymentsForm = document.getElementById('dodopayments-form');
+                const checkoutContainer = document.getElementById('dodopayments-checkout-container');
+                
+                if (dodopaymentsPayBtn && dodopaymentsForm) {
+                    dodopaymentsPayBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        
+                        // Show loading state
+                        dodopaymentsPayBtn.disabled = true;
+                        dodopaymentsPayBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+                        
+                        // Submit form via AJAX
+                        const formData = new FormData(dodopaymentsForm);
+                        
+                        fetch(dodopaymentsForm.action, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log('DodoPayments response:', data);
+                            if (data.status && data.overlay_checkout) {
+                                // Check if it's a mock payment for localhost
+                                if (data.mock_payment) {
+                                    console.log('Using mock payment interface');
+                                    // For localhost, show a mock payment interface
+                                    showMockPaymentInterface(data.payment_id);
+                                } else {
+                                    console.log('Using real DodoPayments overlay');
+                                    // Initialize DodoPayments overlay checkout
+                                    initializeDodoPaymentsOverlay(data.payment_id, data.api_key);
+                                }
+                            } else {
+                                // Handle error
+                                alert(data.message || 'Payment initialization failed');
+                                resetButton();
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('An error occurred while processing payment');
+                            resetButton();
+                        });
+                    });
+                }
+                
+                function resetButton() {
+                    dodopaymentsPayBtn.disabled = false;
+                    dodopaymentsPayBtn.innerHTML = '<span>Pay with DodoPayments</span>';
+                }
+                
+                function showMockPaymentInterface(paymentId) {
+                    // Create overlay for mock payment
+                    const overlay = document.createElement('div');
+                    overlay.id = 'dodopayments-overlay';
+                    overlay.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.8);
+                        z-index: 9999;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    `;
+                    
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        background: white;
+                        padding: 30px;
+                        border-radius: 10px;
+                        max-width: 500px;
+                        width: 90%;
+                        text-align: center;
+                    `;
+                    
+                    modal.innerHTML = `
+                        <h3>DodoPayments Mock Payment</h3>
+                        <p>Payment ID: ${paymentId}</p>
+                        <p>This is a mock payment interface for localhost development.</p>
+                        <div style="margin: 20px 0;">
+                            <button id="mock-success" style="background: #28a745; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer;">Simulate Success</button>
+                            <button id="mock-failure" style="background: #dc3545; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer;">Simulate Failure</button>
+                        </div>
+                        <button id="mock-close" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Close</button>
+                    `;
+                    
+                    overlay.appendChild(modal);
+                    document.body.appendChild(overlay);
+                    
+                    // Event listeners
+                    document.getElementById('mock-success').addEventListener('click', function() {
+                        document.body.removeChild(overlay);
+                        window.location.href = '{{ route("front.checkout.redirect") }}?payment_id=' + paymentId + '&status=success';
+                    });
+                    
+                    document.getElementById('mock-failure').addEventListener('click', function() {
+                        document.body.removeChild(overlay);
+                        alert('Payment failed. Please try again.');
+                        resetButton();
+                    });
+                    
+                    document.getElementById('mock-close').addEventListener('click', function() {
+                        document.body.removeChild(overlay);
+                        resetButton();
+                    });
+                }
+                
+                function initializeDodoPaymentsOverlay(paymentId, apiKey) {
+                    // Create overlay iframe
+                    const overlay = document.createElement('div');
+                    overlay.id = 'dodopayments-overlay';
+                    overlay.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.8);
+                        z-index: 9999;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    `;
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = `https://checkout.dodopayments.com/payment/${paymentId}?api_key=${apiKey}`;
+                    iframe.style.cssText = `
+                        width: 90%;
+                        max-width: 500px;
+                        height: 80%;
+                        border: none;
+                        border-radius: 10px;
+                        background: white;
+                    `;
+                    
+                    const closeBtn = document.createElement('button');
+                    closeBtn.innerHTML = '×';
+                    closeBtn.style.cssText = `
+                        position: absolute;
+                        top: 20px;
+                        right: 20px;
+                        background: #ff4444;
+                        color: white;
+                        border: none;
+                        border-radius: 50%;
+                        width: 40px;
+                        height: 40px;
+                        font-size: 24px;
+                        cursor: pointer;
+                        z-index: 10000;
+                    `;
+                    
+                    closeBtn.addEventListener('click', function() {
+                        document.body.removeChild(overlay);
+                        resetButton();
+                    });
+                    
+                    overlay.appendChild(iframe);
+                    overlay.appendChild(closeBtn);
+                    document.body.appendChild(overlay);
+                    
+                    // Listen for payment completion
+                    window.addEventListener('message', function(event) {
+                        if (event.origin === 'https://checkout.dodopayments.com') {
+                            if (event.data.type === 'payment_completed') {
+                                document.body.removeChild(overlay);
+                                window.location.href = '{{ route("front.checkout.redirect") }}?payment_id=' + event.data.payment_id + '&status=success';
+                            } else if (event.data.type === 'payment_failed') {
+                                document.body.removeChild(overlay);
+                                alert('Payment failed. Please try again.');
+                                resetButton();
+                            }
+                        }
+                    });
+                }
+            });
+        </script>
     @endonce
 

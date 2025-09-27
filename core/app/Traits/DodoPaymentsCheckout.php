@@ -106,8 +106,27 @@ trait DodoPaymentsCheckout
             Session::put('order_input_data', $data);
             Session::put('dodopayments_order_id', $orderData['transaction_number']);
             
-            // Initialize DodoPayments client
-            $client = new Client($apiKey);
+            // For localhost development, create a mock payment
+            // Temporarily comment this out to test real API on localhost
+            if (false && (app()->environment('local') || str_contains(request()->getHost(), 'localhost'))) {
+                \Log::info('DodoPayments: Using localhost mock payment');
+                
+                $mockPaymentId = 'mock_payment_' . time() . '_' . $orderData['transaction_number'];
+                
+                return [
+                    'status' => true,
+                    'payment_id' => $mockPaymentId,
+                    'overlay_checkout' => true,
+                    'api_key' => $apiKey,
+                    'mock_payment' => true
+                ];
+            }
+            
+            // Initialize DodoPayments client with timeout
+            $client = new Client($apiKey, [
+                'timeout' => 30,
+                'connect_timeout' => 10
+            ]);
             
             // Prepare parameters for DodoPayments SDK
             $billing = [
@@ -161,18 +180,21 @@ trait DodoPaymentsCheckout
                 'order_id' => $orderData['transaction_number']
             ]);
             
-            if (isset($payment->payment_url)) {
+            // Return payment data for overlay checkout instead of redirect URL
+            if (isset($payment->payment_id)) {
                 return [
                     'status' => true,
-                    'link' => $payment->payment_url
+                    'payment_id' => $payment->payment_id,
+                    'overlay_checkout' => true,
+                    'api_key' => $apiKey
                 ];
             } else {
-                \Log::error('DodoPayments payment created but no payment_url returned', [
+                \Log::error('DodoPayments payment created but no payment_id returned', [
                     'payment_object' => $payment
                 ]);
                 return [
                     'status' => false,
-                    'message' => 'Payment created but no checkout URL received'
+                    'message' => 'Payment created but no payment ID received'
                 ];
             }
             
