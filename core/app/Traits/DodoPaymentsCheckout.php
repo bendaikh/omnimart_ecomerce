@@ -224,6 +224,57 @@ trait DodoPaymentsCheckout
             try {
                 \Log::info('DodoPayments: Testing direct HTTP API call');
                 
+                // Try to create a product first, then use it for payment
+                \Log::info('DodoPayments: Attempting to create product first');
+                
+                $productData = [
+                    'name' => $setting->title . ' Order',
+                    'price' => (int) round($total_amount * 100),
+                    'currency' => 'USD',
+                    'type' => 'one_time'
+                ];
+                
+                try {
+                    $productResponse = \Http::timeout(30)
+                        ->withHeaders([
+                            'Authorization' => 'Bearer ' . $apiKey,
+                            'Content-Type' => 'application/json',
+                            'Accept' => 'application/json'
+                        ])
+                        ->post($baseUrl . '/products', $productData);
+                    
+                    \Log::info('DodoPayments: Product creation response', [
+                        'status' => $productResponse->status(),
+                        'response_body' => $productResponse->body()
+                    ]);
+                    
+                    if ($productResponse->successful()) {
+                        $productResult = $productResponse->json();
+                        $productId = $productResult['id'] ?? $productResult['product_id'] ?? null;
+                        
+                        if ($productId) {
+                            \Log::info('DodoPayments: Product created successfully', [
+                                'product_id' => $productId
+                            ]);
+                            
+                            // Update product_cart with the created product
+                            $productCart = [
+                                [
+                                    'product_id' => $productId,
+                                    'quantity' => 1,
+                                    'name' => $setting->title . ' Order',
+                                    'price' => (int) round($total_amount * 100),
+                                    'currency' => 'USD'
+                                ]
+                            ];
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning('DodoPayments: Product creation failed', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+                
                 // Use correct endpoints based on DodoPayments documentation
                 $endpoints = [
                     $baseUrl . '/payments',  // Correct endpoint for one-time payments
