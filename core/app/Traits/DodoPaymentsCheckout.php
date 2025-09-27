@@ -236,14 +236,17 @@ trait DodoPaymentsCheckout
                     try {
                         \Log::info('DodoPayments: Trying endpoint', ['endpoint' => $endpoint]);
                         
+                        // Try minimal payload first
                         $payload = [
                             'billing' => $billing,
                             'customer' => $customer,
                             'product_cart' => $productCart,
-                            'metadata' => $metadata,
-                            'return_url' => $returnURL,
-                            'webhook_url' => route('front.checkout.dodopayments.webhook')
+                            'return_url' => $returnURL
                         ];
+                        
+                        \Log::info('DodoPayments: Payload being sent', [
+                            'payload' => $payload
+                        ]);
                         
                         $response = \Http::timeout(30)
                             ->withHeaders([
@@ -256,7 +259,8 @@ trait DodoPaymentsCheckout
                         \Log::info('DodoPayments: Endpoint response', [
                             'endpoint' => $endpoint,
                             'status' => $response->status(),
-                            'response_size' => strlen($response->body())
+                            'response_size' => strlen($response->body()),
+                            'response_body' => $response->body()
                         ]);
                         
                         if ($response->status() !== 404) {
@@ -300,7 +304,7 @@ trait DodoPaymentsCheckout
                         }
                     }
                 } else {
-                    \Log::warning('DodoPayments: No working endpoint found');
+                    \Log::warning('DodoPayments: No working endpoint found - trying SDK method');
                 }
                 
                 // If direct HTTP doesn't work, fall back to SDK
