@@ -249,11 +249,63 @@ trait DodoPaymentsCheckout
                 'timeout' => $requestOptions->timeout
             ]);
             
-            // Try direct HTTP call using payment_link approach as per documentation
+            // First create a product, then create payment with payment_link
             try {
-                \Log::info('DodoPayments: Using payment_link approach from documentation');
+                \Log::info('DodoPayments: Creating product first, then payment with payment_link');
                 
-                // Create payment with payment_link=true as shown in documentation
+                // Step 1: Create a product first
+                $productData = [
+                    'name' => $setting->title . ' Order',
+                    'price' => [
+                        'amount' => (int) round($total_amount * 100),
+                        'currency' => 'USD',
+                        'type' => 'one_time_price'
+                    ],
+                    'type' => 'one_time'
+                ];
+                
+                \Log::info('DodoPayments: Creating product', ['product_data' => $productData]);
+                
+                $productResponse = \Http::timeout(30)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type' => 'application/json',
+                        'Accept' => 'application/json'
+                    ])
+                    ->post($baseUrl . '/products', $productData);
+                
+                \Log::info('DodoPayments: Product creation response', [
+                    'status' => $productResponse->status(),
+                    'response_body' => $productResponse->body()
+                ]);
+                
+                $productId = null;
+                if ($productResponse->successful()) {
+                    $productResult = $productResponse->json();
+                    $productId = $productResult['id'] ?? $productResult['product_id'] ?? null;
+                    
+                    if ($productId) {
+                        \Log::info('DodoPayments: Product created successfully', [
+                            'product_id' => $productId
+                        ]);
+                        
+                        // Update product cart with the created product
+                        $productCart = [
+                            [
+                                'product_id' => $productId,
+                                'quantity' => 1,
+                                'name' => $setting->title . ' Order'
+                            ]
+                        ];
+                    }
+                }
+                
+                if (!$productId) {
+                    \Log::warning('DodoPayments: Product creation failed, trying direct payment approach');
+                    throw new \Exception('Product creation failed');
+                }
+                
+                // Step 2: Create payment with payment_link=true using the created product
                 $paymentPayload = [
                     'payment_link' => true,
                     'billing' => $billing,
@@ -263,7 +315,7 @@ trait DodoPaymentsCheckout
                     'metadata' => $metadata
                 ];
                 
-                \Log::info('DodoPayments: Payment payload', ['payload' => $paymentPayload]);
+                \Log::info('DodoPayments: Creating payment with product', ['payload' => $paymentPayload]);
                 
                 $response = \Http::timeout(30)
                     ->withHeaders([
@@ -313,6 +365,55 @@ trait DodoPaymentsCheckout
             
             // Create payment using the official SDK with payment_link=true
             try {
+                // If we don't have a product ID from the HTTP call, try to create one via SDK or use a different approach
+                if (empty($productCart[0]['product_id']) || str_contains($productCart[0]['product_id'], 'generic_order_')) {
+                    \Log::info('DodoPayments: No valid product ID, trying to create product via SDK or use alternative approach');
+                    
+                    // Try to create a simple payment without product_cart
+                    $paymentPayload = [
+                        'payment_link' => true,
+                        'amount' => (int) round($total_amount * 100),
+                        'currency' => 'USD',
+                        'billing' => $billing,
+                        'customer' => $customer,
+                        'return_url' => $returnURL,
+                        'metadata' => $metadata
+                    ];
+                    
+                    \Log::info('DodoPayments: Trying payment without product_cart', ['payload' => $paymentPayload]);
+                    
+                    $simpleResponse = \Http::timeout(30)
+                        ->withHeaders([
+                            'Authorization' => 'Bearer ' . $apiKey,
+                            'Content-Type' => 'application/json',
+                            'Accept' => 'application/json'
+                        ])
+                        ->post($baseUrl . '/payments', $paymentPayload);
+                    
+                    \Log::info('DodoPayments: Simple payment response', [
+                        'status' => $simpleResponse->status(),
+                        'response_body' => $simpleResponse->body()
+                    ]);
+                    
+                    if ($simpleResponse->successful()) {
+                        $responseData = $simpleResponse->json();
+                        $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? $responseData['checkout_session_id'] ?? null;
+                        
+                        if ($paymentId) {
+                            \Log::info('DodoPayments: Simple payment created successfully', [
+                                'payment_id' => $paymentId
+                            ]);
+                            
+                            return [
+                                'status' => true,
+                                'payment_id' => $paymentId,
+                                'overlay_checkout' => true,
+                                'api_key' => $apiKey
+                            ];
+                        }
+                    }
+                }
+                
                 \Log::info('DodoPayments: Calling payments->create() via SDK with payment_link');
                 \Log::info('DodoPayments: SDK parameters', [
                     'billing' => $billing,
