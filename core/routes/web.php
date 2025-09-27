@@ -436,6 +436,7 @@ Route::group(['middleware' => 'maintainance'], function () {
         Route::get('/checkout/cancle', 'Front\CheckoutController@paymentCancle')->name('front.checkout.cancle');
         Route::get('/checkout/redirect', 'Front\CheckoutController@paymentRedirect')->name('front.checkout.redirect');
         Route::get('/checkout/mollie/notify', 'Front\CheckoutController@mollieRedirect')->name('front.checkout.mollie.redirect');
+        Route::post('/checkout/dodopayments/webhook', 'Front\CheckoutController@dodoPaymentsWebhook')->name('front.checkout.dodopayments.webhook');
 
         Route::get('/checkout', 'Front\CheckoutController@checkoutPage')->name('front.checkout');
 

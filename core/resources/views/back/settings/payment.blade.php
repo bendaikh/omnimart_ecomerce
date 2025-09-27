@@ -39,6 +39,7 @@
                                     <a class="nav-link" data-toggle="pill" href="#flutterwave">{{ __('Flutterwave') }}</a>
                                     <a class="nav-link" data-toggle="pill" href="#paytabs">{{ __('Paytabs') }}</a>
                                     <a class="nav-link" data-toggle="pill" href="#spaceremit">{{ __('Spaceremit') }}</a>
+                                    <a class="nav-link" data-toggle="pill" href="#dodopayments">{{ __('DodoPayments') }}</a>
                                     <a class="nav-link" data-toggle="pill" href="#bank">{{ __('Bank Transfer') }}</a>
 
                                 </div>
@@ -1521,7 +1522,95 @@
                                                         </div>
                                                     </div>
 
+                                                    <div id="dodopayments" class="container tab-pane"><br>
+                                                        <div class="row justify-content-center">
+                                                            <div class="col-lg-8">
+                                                                <form action="{{ route('back.setting.payment.update') }}"
+                                                                    method="POST" enctype="multipart/form-data">
+                                                                    @csrf
+                                                                    <div class="form-group">
+                                                                        <label class="switch-primary">
+                                                                            <input type="checkbox"
+                                                                                class="switch switch-bootstrap "
+                                                                                name="status" value="1"
+                                                                                {{ $dodopayments->status == 1 ? 'checked' : '' }}>
+                                                                            <span class="switch-body"></span>
+                                                                            <span
+                                                                                class="switch-text">{{ __('Display DodoPayments') }}</span>
+                                                                        </label>
+                                                                    </div>
 
+                                                                    <div
+                                                                        class="image-show {{ $dodopayments->status == 1 ? '' : 'd-none' }}">
+                                                                        <div class="form-group">
+                                                                            <label for="name">{{ __('Enter Name') }}
+                                                                                *</label>
+                                                                            <input type="text" class="form-control"
+                                                                                name="name" id="name"
+                                                                                value="{{ $dodopayments->name }}">
+                                                                        </div>
+
+                                                                        <div class="form-group">
+                                                                            <label
+                                                                                for="name">{{ __('Current Image') }}</label>
+                                                                            <div class="col-lg-12 pb-1">
+                                                                                <img class="admin-setting-img"
+                                                                                    src="{{ $dodopayments->photo ? url('/core/public/storage/images/' . $dodopayments->photo) : url('/core/public/storage/images/placeholder.png') }}"
+                                                                                    alt="No Image Found">
+                                                                            </div>
+                                                                            <span>{{ __('Image Size Should Be 52 x 35.') }}</span>
+                                                                        </div>
+
+                                                                        <div class="form-group position-relative col-xl-12">
+                                                                            <label class="file">
+                                                                                <input type="file" accept="image/*"
+                                                                                    class="upload-photo" name="photo"
+                                                                                    id="file"
+                                                                                    aria-label="File browser example">
+                                                                                <span
+                                                                                    class="file-custom text-left">{{ __('Upload Image...') }}</span>
+                                                                            </label>
+                                                                        </div>
+
+                                                                        <div class="form-group">
+                                                                            <label for="text">{{ __('Enter Text') }}
+                                                                                *</label>
+                                                                            <textarea name="text" id="text" class="form-control " rows="5"
+                                                                                placeholder="{{ __('Enter Text') }}">{{ $dodopayments->text }}</textarea>
+                                                                        </div>
+
+                                                                        <div class="form-group">
+                                                                            <label for="api_key">{{ __('API Key') }}
+                                                                                *</label>
+                                                                            <input type="text" class="form-control"
+                                                                                name="pkey[api_key]" id="api_key"
+                                                                                value="{{ $dodopaymentsData['api_key'] }}"
+                                                                                required>
+                                                                        </div>
+
+                                                                        <div class="form-group">
+                                                                            <label for="webhook_secret">{{ __('Webhook Secret') }}
+                                                                                *</label>
+                                                                            <input type="text" class="form-control"
+                                                                                name="pkey[webhook_secret]" id="webhook_secret"
+                                                                                value="{{ $dodopaymentsData['webhook_secret'] }}"
+                                                                                required>
+                                                                        </div>
+
+                                                                        <input type="hidden" name="unique_keyword"
+                                                                            value="dodopayments">
+                                                                    </div>
+                                                                    <div>
+                                                                        <div
+                                                                            class="form-group d-flex justify-content-center">
+                                                                            <button type="submit"
+                                                                                class="btn btn-secondary btn-block w-50">{{ __('Submit') }}</button>
+                                                                        </div>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
                                                 </div>
                                             </div>

@@ -84,6 +84,24 @@ class PaymentSettingRepository
         $data['spaceremitData'] = $spaceremit->convertJsonData();
         $data['spaceremit'] = $spaceremit;
 
+        // DodoPayments
+        $dodopayments = PaymentSetting::firstOrCreate(
+            [
+                'unique_keyword' => 'dodopayments'
+            ],
+            [
+                'name' => 'DodoPayments',
+                'information' => json_encode([
+                    'api_key' => 'jF45G6LYBTdOKS5t.J_wHXPS4clw7n383zJ7Quppj3aA7c2_M4UY_uW4L_o48wdds',
+                    'webhook_secret' => 'whsec_jf5yKJqvZmvCqgeZToYlmMzQoXpY0CMT'
+                ]),
+                'status' => 0
+            ]
+        );
+
+        $data['dodopaymentsData'] = $dodopayments->convertJsonData();
+        $data['dodopayments'] = $dodopayments;
+
         $cod = PaymentSetting::whereUniqueKeyword('cod')->first();
         $data['cod'] = $cod;
 

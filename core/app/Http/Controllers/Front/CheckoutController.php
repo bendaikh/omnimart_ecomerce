@@ -14,6 +14,7 @@ use App\{
     Traits\CashOnDeliveryCheckout,
     Traits\BankCheckout,
     Traits\SpaceremitCheckout,
+    Traits\DodoPaymentsCheckout,
 };
 use App\Helpers\PriceHelper;
 use App\Helpers\SmsHelper;
@@ -46,6 +47,7 @@ class CheckoutController extends Controller
     use PaystackCheckout;
     use CashOnDeliveryCheckout;
     use SpaceremitCheckout;
+    use DodoPaymentsCheckout;
 
     public function __construct()
     {
@@ -587,6 +589,12 @@ class CheckoutController extends Controller
                 $checkout = true;
                 $payment = $this->cashOnDeliverySubmit($input);
                 break;
+
+            case 'DodoPayments':
+                $checkout = true;
+                $payment_redirect = true;
+                $payment = $this->dodoPaymentsSubmit($input);
+                break;
         }
 
 
@@ -627,6 +635,14 @@ class CheckoutController extends Controller
             }
         } elseif (Session::has('order_payment_id')) {
             $payment = $this->paypalNotify($responseData);
+            if ($payment['status']) {
+                return redirect()->route('front.checkout.success');
+            } else {
+                Session::put('message', $payment['message']);
+                return redirect()->route('front.checkout.cancle');
+            }
+        } elseif (Session::has('dodopayments_payment_id')) {
+            $payment = $this->dodoPaymentsNotify($responseData);
             if ($payment['status']) {
                 return redirect()->route('front.checkout.success');
             } else {
@@ -823,5 +839,16 @@ class CheckoutController extends Controller
         $data['grand_total'] = PriceHelper::setCurrencyPrice($total_amount);
 
         return response()->json($data);
+    }
+
+    public function dodoPaymentsWebhook(Request $request)
+    {
+        $payment = $this->dodoPaymentsNotify($request->all());
+        
+        if ($payment['status']) {
+            return response()->json(['status' => 'success'], 200);
+        } else {
+            return response()->json(['status' => 'error', 'message' => $payment['message']], 400);
+        }
     }
 }
