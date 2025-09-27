@@ -238,8 +238,61 @@ trait DodoPaymentsCheckout
             try {
                 \Log::info('DodoPayments: Testing direct HTTP API call');
                 
-                // Skip product creation for now and try direct payment creation
-                \Log::info('DodoPayments: Skipping product creation, attempting direct payment');
+                // Try to create a product first, then use it for payment
+                \Log::info('DodoPayments: Attempting to create product first');
+                
+                $productData = [
+                    'name' => $setting->title . ' Order',
+                    'price' => [
+                        'amount' => (int) round($total_amount * 100),
+                        'currency' => 'USD'
+                    ],
+                    'type' => 'one_time'
+                ];
+                
+                $productId = null;
+                try {
+                    $productResponse = \Http::timeout(30)
+                        ->withHeaders([
+                            'Authorization' => 'Bearer ' . $apiKey,
+                            'Content-Type' => 'application/json',
+                            'Accept' => 'application/json'
+                        ])
+                        ->post($baseUrl . '/products', $productData);
+                    
+                    \Log::info('DodoPayments: Product creation response', [
+                        'status' => $productResponse->status(),
+                        'response_body' => $productResponse->body()
+                    ]);
+                    
+                    if ($productResponse->successful()) {
+                        $productResult = $productResponse->json();
+                        $productId = $productResult['id'] ?? $productResult['product_id'] ?? null;
+                        
+                        if ($productId) {
+                            \Log::info('DodoPayments: Product created successfully', [
+                                'product_id' => $productId
+                            ]);
+                            
+                            // Update product_cart with the created product
+                            $productCart = [
+                                [
+                                    'product_id' => $productId,
+                                    'quantity' => 1,
+                                    'name' => $setting->title . ' Order',
+                                    'price' => [
+                                        'amount' => (int) round($total_amount * 100),
+                                        'currency' => 'USD'
+                                    ]
+                                ]
+                            ];
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning('DodoPayments: Product creation failed', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
                 
                 // Use correct endpoints based on DodoPayments documentation
                 $endpoints = [
@@ -254,26 +307,19 @@ trait DodoPaymentsCheckout
                         \Log::info('DodoPayments: Trying endpoint', ['endpoint' => $endpoint]);
                         
                         // Try different payload structures
-                        $payloads = [
-                            // Simple payment structure
-                            [
-                                'amount' => (int) round($total_amount * 100),
-                                'currency' => 'USD',
-                                'customer' => $customer,
-                                'billing' => $billing,
-                                'return_url' => $returnURL,
-                                'metadata' => $metadata
-                            ],
-                            // Standard payload with product_cart
-                            [
+                        $payloads = [];
+                        
+                        // If we have a valid product ID, try with product_cart first
+                        if ($productId) {
+                            $payloads[] = [
                                 'billing' => $billing,
                                 'customer' => $customer,
                                 'product_cart' => $productCart,
                                 'return_url' => $returnURL,
                                 'metadata' => $metadata
-                            ],
-                            // Alternative payload structure with amount and product_cart
-                            [
+                            ];
+                            
+                            $payloads[] = [
                                 'amount' => (int) round($total_amount * 100),
                                 'currency' => 'USD',
                                 'customer' => $customer,
@@ -281,7 +327,17 @@ trait DodoPaymentsCheckout
                                 'product_cart' => $productCart,
                                 'return_url' => $returnURL,
                                 'metadata' => $metadata
-                            ]
+                            ];
+                        }
+                        
+                        // Always try simple payment structure as fallback
+                        $payloads[] = [
+                            'amount' => (int) round($total_amount * 100),
+                            'currency' => 'USD',
+                            'customer' => $customer,
+                            'billing' => $billing,
+                            'return_url' => $returnURL,
+                            'metadata' => $metadata
                         ];
                         
                         foreach ($payloads as $index => $payload) {
@@ -369,6 +425,13 @@ trait DodoPaymentsCheckout
             // Create payment using the official SDK with correct parameters
             try {
                 \Log::info('DodoPayments: Calling payments->create() via SDK');
+                \Log::info('DodoPayments: SDK parameters', [
+                    'billing' => $billing,
+                    'customer' => $customer,
+                    'product_cart' => $productCart,
+                    'metadata' => $metadata,
+                    'return_url' => $returnURL
+                ]);
                 
                 // Set a maximum execution time for this specific operation
                 $startTime = microtime(true);
@@ -395,7 +458,8 @@ trait DodoPaymentsCheckout
                 \Log::info('DodoPayments: payments->create() completed', [
                     'payment_object' => $payment ? 'received' : 'null',
                     'payment_id' => $payment->payment_id ?? 'no_payment_id',
-                    'execution_time_ms' => $executionTime
+                    'execution_time_ms' => $executionTime,
+                    'payment_type' => get_class($payment) ?? 'unknown'
                 ]);
             } catch (\GuzzleHttp\Exception\ConnectException $e) {
                 \Log::error('DodoPayments: Connection timeout', [
@@ -418,6 +482,55 @@ trait DodoPaymentsCheckout
                     'class' => get_class($e),
                     'trace' => $e->getTraceAsString()
                 ]);
+                
+                // If SDK fails, try one more direct HTTP call as last resort
+                \Log::info('DodoPayments: SDK failed, trying final direct HTTP call');
+                try {
+                    $finalPayload = [
+                        'amount' => (int) round($total_amount * 100),
+                        'currency' => 'USD',
+                        'customer' => $customer,
+                        'billing' => $billing,
+                        'return_url' => $returnURL,
+                        'metadata' => $metadata
+                    ];
+                    
+                    $finalResponse = \Http::timeout(30)
+                        ->withHeaders([
+                            'Authorization' => 'Bearer ' . $apiKey,
+                            'Content-Type' => 'application/json',
+                            'Accept' => 'application/json'
+                        ])
+                        ->post($baseUrl . '/payments', $finalPayload);
+                    
+                    \Log::info('DodoPayments: Final HTTP call result', [
+                        'status' => $finalResponse->status(),
+                        'response_body' => $finalResponse->body()
+                    ]);
+                    
+                    if ($finalResponse->successful()) {
+                        $responseData = $finalResponse->json();
+                        $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? $responseData['checkout_session_id'] ?? null;
+                        
+                        if ($paymentId) {
+                            \Log::info('DodoPayments: Final HTTP call successful', [
+                                'payment_id' => $paymentId
+                            ]);
+                            
+                            return [
+                                'status' => true,
+                                'payment_id' => $paymentId,
+                                'overlay_checkout' => true,
+                                'api_key' => $apiKey
+                            ];
+                        }
+                    }
+                } catch (\Exception $finalException) {
+                    \Log::error('DodoPayments: Final HTTP call also failed', [
+                        'message' => $finalException->getMessage()
+                    ]);
+                }
+                
                 throw $e;
             }
             
