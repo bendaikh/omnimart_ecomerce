@@ -388,8 +388,16 @@ trait DodoPaymentsCheckout
                     $checkoutUrl = $checkoutData['checkout_url'] ?? null;
                     $sessionId = $checkoutData['session_id'] ?? null;
                     
+                    \Log::info('DodoPayments: Checkout session response data', [
+                        'checkout_data' => $checkoutData,
+                        'checkout_url' => $checkoutUrl,
+                        'session_id' => $sessionId,
+                        'has_checkout_url' => !empty($checkoutUrl),
+                        'has_session_id' => !empty($sessionId)
+                    ]);
+                    
                     if ($checkoutUrl && $sessionId) {
-                        \Log::info('DodoPayments: Checkout session created successfully', [
+                        \Log::info('DodoPayments: Checkout session created successfully - RETURNING RESPONSE', [
                             'session_id' => $sessionId,
                             'checkout_url' => $checkoutUrl
                         ]);
@@ -402,6 +410,13 @@ trait DodoPaymentsCheckout
                             'overlay_checkout' => true,
                             'api_key' => $apiKey
                         ];
+                    } else {
+                        \Log::warning('DodoPayments: Checkout session created but missing required fields', [
+                            'has_checkout_url' => !empty($checkoutUrl),
+                            'has_session_id' => !empty($sessionId),
+                            'checkout_url_value' => $checkoutUrl,
+                            'session_id_value' => $sessionId
+                        ]);
                     }
                 } else {
                     \Log::warning('DodoPayments: Checkout session creation failed', [
@@ -410,7 +425,7 @@ trait DodoPaymentsCheckout
                     ]);
                     
                     // Fallback to payment creation if checkout sessions fail
-                    \Log::info('DodoPayments: Falling back to payment creation');
+                    \Log::info('DodoPayments: Falling back to payment creation - checkout session creation failed');
                     
                     $paymentPayload = [
                         'payment_link' => true,
