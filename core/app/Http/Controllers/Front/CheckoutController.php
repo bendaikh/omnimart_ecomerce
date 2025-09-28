@@ -696,6 +696,11 @@ class CheckoutController extends Controller
                             $response['mock_payment'] = $payment['mock_payment'];
                         }
                         
+                        // Add checkout_url if present (for Checkout Sessions)
+                        if (isset($payment['checkout_url'])) {
+                            $response['checkout_url'] = $payment['checkout_url'];
+                        }
+                        
                         return response()->json($response);
                     }
                     return redirect()->route('front.checkout.success');
