@@ -71,20 +71,20 @@ trait DodoPaymentsCheckout
         if (!PriceHelper::Digital()) {
             $shipping = null;
         } else {
-            $shipping = ShippingService::findOrFail($data['shipping_id']);
+            $shipping = isset($data['shipping_id']) && $data['shipping_id'] ? ShippingService::findOrFail($data['shipping_id']) : null;
         }
 
-        $orderData['state'] = $data['state_id'] ? json_encode(State::findOrFail($data['state_id']), true) : null;
+        $orderData['state'] = (isset($data['state_id']) && $data['state_id']) ? json_encode(State::findOrFail($data['state_id']), true) : null;
         $grand_total = ($cart_total + ($shipping ? $shipping->price : 0)) + $total_tax;
         $grand_total = $grand_total - ($discount ? $discount['discount'] : 0);
-        $grand_total += PriceHelper::StatePrce($data['state_id'], $cart_total);
+        $grand_total += PriceHelper::StatePrce(isset($data['state_id']) ? $data['state_id'] : null, $cart_total);
         $total_amount = PriceHelper::setConvertPrice($grand_total);
 
         $orderData['cart'] = json_encode($cart, true);
         $orderData['discount'] = json_encode($discount, true);
         $orderData['shipping'] = json_encode($shipping, true);
         $orderData['tax'] = $total_tax;
-        $orderData['state_price'] = PriceHelper::StatePrce($data['state_id'], $cart_total);
+        $orderData['state_price'] = PriceHelper::StatePrce(isset($data['state_id']) ? $data['state_id'] : null, $cart_total);
         $orderData['shipping_info'] = json_encode(Session::get('shipping_address'), true);
         $orderData['billing_info'] = json_encode(Session::get('billing_address'), true);
         $orderData['payment_method'] = 'DodoPayments';
@@ -811,7 +811,7 @@ trait DodoPaymentsCheckout
             if (!PriceHelper::Digital()) {
                 $shipping = null;
             } else {
-                $shipping = ShippingService::findOrFail($order_input_data['shipping_id']);
+                $shipping = (isset($order_input_data['shipping_id']) && $order_input_data['shipping_id']) ? ShippingService::findOrFail($order_input_data['shipping_id']) : null;
             }
             $discount = [];
             if (Session::has('coupon')) {
@@ -820,7 +820,7 @@ trait DodoPaymentsCheckout
 
             $grand_total = ($cart_total + ($shipping ? $shipping->price : 0)) + $total_tax;
             $grand_total = $grand_total - ($discount ? $discount['discount'] : 0);
-            $grand_total += PriceHelper::StatePrce($order_input_data['state_id'], $cart_total);
+            $grand_total += PriceHelper::StatePrce(isset($order_input_data['state_id']) ? $order_input_data['state_id'] : null, $cart_total);
 
             $total_amount = PriceHelper::setConvertPrice($grand_total);
 
