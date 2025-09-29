@@ -101,11 +101,13 @@
                             <div class="rating-stars d-inline-block gmr-3">
                                 {!! Helper::renderStarRating($item->reviews->avg('rating')) !!}
                             </div>
-                            @if ($item->is_stock())
-                                <span class="text-success  d-inline-block">{{ __('In Stock') }} <b>({{ $item->stock }}
-                                        @lang('items'))</b></span>
-                            @else
-                                <span class="text-danger  d-inline-block">{{ __('Out of stock') }}</span>
+                            @if ($item->item_type != 'digital')
+                                @if ($item->is_stock())
+                                    <span class="text-success  d-inline-block">{{ __('In Stock') }} <b>({{ $item->stock }}
+                                            @lang('items'))</b></span>
+                                @else
+                                    <span class="text-danger  d-inline-block">{{ __('Out of stock') }}</span>
+                                @endif
                             @endif
                         </div>
 

@@ -137,12 +137,92 @@ trait DodoPaymentsCheckout
                 
                 $mockPaymentId = 'mock_payment_' . time() . '_' . $orderData['transaction_number'];
                 
+                // For mock payments, immediately process the order since there's no real payment gateway
+                \Log::info('DodoPayments: Processing mock payment order immediately');
+                
+                // Process the order immediately for mock payments
+                $cart = Session::get('cart');
+                $user = Auth::user();
+                $total_tax = 0;
+                $cart_total = 0;
+                $total = 0;
+                $option_price = 0;
+
+                foreach ($cart as $key => $items) {
+                    $total += $items['main_price'] * $items['qty'];
+                    $option_price += $items['attribute_price'];
+                    $cart_total = $total + $option_price;
+                    $item = Item::findOrFail($key);
+                    if ($item->tax) {
+                        $total_tax += $item::taxCalculate($item) * $items['qty'];
+                    }
+                }
+
+                $order_input_data = Session::get('order_input_data');
+                if (!PriceHelper::Digital()) {
+                    $shipping = null;
+                } else {
+                    $shipping = (isset($order_input_data['shipping_id']) && $order_input_data['shipping_id']) ? ShippingService::findOrFail($order_input_data['shipping_id']) : null;
+                }
+                $discount = [];
+                if (Session::has('coupon')) {
+                    $discount = Session::get('coupon');
+                }
+
+                $grand_total = ($cart_total + ($shipping ? $shipping->price : 0)) + $total_tax;
+                $grand_total = $grand_total - ($discount ? $discount['discount'] : 0);
+                $grand_total += PriceHelper::StatePrce(isset($order_input_data['state_id']) ? $order_input_data['state_id'] : null, $cart_total);
+
+                $total_amount = PriceHelper::setConvertPrice($grand_total);
+
+                $orderData['txnid'] = $mockPaymentId;
+                $orderData['payment_status'] = 'Paid';
+
+                $order = Order::create($orderData);
+
+                $new_txn = 'ORD-' . str_pad(Carbon::now()->format('Ymd'), 4, '0000', STR_PAD_LEFT) . '-' . $order->id;
+                $order->transaction_number = $new_txn;
+                $order->save();
+
+                PriceHelper::Transaction($order->id, $order->transaction_number, EmailHelper::getEmail(), PriceHelper::OrderTotal($order, 'trns'));
+                PriceHelper::LicenseQtyDecrese($cart);
+                PriceHelper::LicenseQtyDecrese($cart);
+
+                if (Session::has('copon')) {
+                    $code = PromoCode::find(Session::get('copon')['code']['id']);
+                    $code->no_of_times--;
+                    $code->update();
+                }
+
+                if ($discount) {
+                    $coupon_id = $discount['code']['id'];
+                    $get_coupon = PromoCode::findOrFail($coupon_id);
+                    $get_coupon->no_of_times -= 1;
+                    $get_coupon->update();
+                }
+
+                TrackOrder::create([
+                    'title' => 'Pending',
+                    'order_id' => $order->id,
+                ]);
+
+                Notification::create([
+                    'order_id' => $order->id
+                ]);
+
+                \Log::info('DodoPayments: Mock payment order created successfully', [
+                    'order_id' => $order->id,
+                    'transaction_number' => $order->transaction_number
+                ]);
+                
                 return [
                     'status' => true,
                     'payment_id' => $mockPaymentId,
                     'overlay_checkout' => true,
                     'api_key' => $apiKey,
-                    'mock_payment' => true
+                    'mock_payment' => true,
+                    'order_created' => true,
+                    'order_id' => $order->id
                 ];
             }
             
