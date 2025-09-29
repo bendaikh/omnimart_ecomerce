@@ -133,7 +133,7 @@
                 <input type="hidden" class="payment_gateway" value="dodopayments">
                 <div class="alert alert-info mb-3">
                     <i class="fas fa-credit-card"></i>
-                    {{ __('Payment will be processed securely through DodoPayments') }}
+                    {{ __('Payment will be processed securely') }}
                 </div>
 
                 @if ($setting->is_privacy_trams == 1)

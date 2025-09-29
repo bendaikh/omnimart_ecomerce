@@ -140,7 +140,7 @@
                             <div class="col-12">
                                 <div class="alert alert-info mb-4">
                                     <i class="fas fa-credit-card"></i>
-                                    {{ __('Payment will be processed securely through DodoPayments') }}
+                                    {{ __('Payment will be processed securely') }}
                                 </div>
                                 
                                 <!-- Direct Pay Now Button -->
