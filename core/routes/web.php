@@ -292,6 +292,29 @@ Route::group(['middleware' => ['adminlocalize', 'demo']], function () {
             Route::get('/subscribers/send-mail', 'Back\SubscriberController@sendMail')->name('back.subscribers.mail');
             Route::post('/subscribers/send-mail/submit', 'Back\SubscriberController@sendMailSubmit')->name('back.subscribers.mail.submit');
         });
+
+        Route::group(['middleware' => 'permissions:Manage System User'], function () {
+            //------------ API CLIENT MANAGEMENT ------------
+            Route::get('/api-clients', 'Back\ApiClientController@index')->name('back.api-clients.index');
+            Route::get('/api-clients/create', 'Back\ApiClientController@create')->name('back.api-clients.create');
+            Route::post('/api-clients/store', 'Back\ApiClientController@store')->name('back.api-clients.store');
+            Route::get('/api-clients/{id}', 'Back\ApiClientController@show')->name('back.api-clients.show');
+            Route::get('/api-clients/{id}/edit', 'Back\ApiClientController@edit')->name('back.api-clients.edit');
+            Route::put('/api-clients/{id}', 'Back\ApiClientController@update')->name('back.api-clients.update');
+            Route::delete('/api-clients/{id}', 'Back\ApiClientController@destroy')->name('back.api-clients.destroy');
+            
+            // API Client Actions
+            Route::post('/api-clients/{id}/approve', 'Back\ApiClientController@approve')->name('back.api-clients.approve');
+            Route::post('/api-clients/{id}/revoke', 'Back\ApiClientController@revoke')->name('back.api-clients.revoke');
+            Route::post('/api-clients/{id}/activate', 'Back\ApiClientController@activate')->name('back.api-clients.activate');
+            Route::post('/api-clients/{id}/suspend', 'Back\ApiClientController@suspend')->name('back.api-clients.suspend');
+            Route::post('/api-clients/{id}/regenerate', 'Back\ApiClientController@regenerateCredentials')->name('back.api-clients.regenerate');
+            
+            // API Transactions
+            Route::get('/api-clients/{id}/transactions', 'Back\ApiClientController@transactions')->name('back.api-clients.transactions');
+            Route::get('/api-transactions', 'Back\ApiClientController@allTransactions')->name('back.api-transactions.index');
+            Route::get('/api-transactions/{id}', 'Back\ApiClientController@transactionDetail')->name('back.api-transactions.show');
+        });
     });
 });
 

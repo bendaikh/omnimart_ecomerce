@@ -70,5 +70,6 @@ class Kernel extends HttpKernel
         'permissions' => \App\Http\Middleware\Permission::class,
         'maintainance' => \App\Http\Middleware\Maintainance::class,
         'demo' => \App\Http\Middleware\Demo::class,
+        'api.client' => \App\Http\Middleware\ApiClientAuth::class, // API Client Authentication
     ];
 }

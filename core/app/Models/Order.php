@@ -9,6 +9,8 @@ class Order extends Model
 {
     protected $fillable = [
         'user_id',
+        'api_client_id',
+        'external_order_id',
         'user_info',
         'cart',
         'shipping',
@@ -51,6 +53,16 @@ class Order extends Model
     public function notificaton()
     {
     	return $this->hasMany('App\Models\Notification','order_id');
+    }
+
+    public function apiClient()
+    {
+        return $this->belongsTo('App\Models\ApiClient')->withDefault();
+    }
+
+    public function apiTransaction()
+    {
+        return $this->hasOne('App\Models\ApiTransaction','order_id')->withDefault();
     }
 
 }

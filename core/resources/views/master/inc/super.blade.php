@@ -341,6 +341,34 @@
             </ul>
         </div>
     </li>
+
+    <li class="nav-item">
+        <a data-toggle="collapse" href="#api-clients">
+            <i class="fas fa-plug"></i>
+            <p>{{ __('API Clients') }}</p>
+            <span class="caret"></span>
+        </a>
+        <div class="collapse" id="api-clients">
+            <ul class="nav nav-collapse">
+                <li>
+                    <a class="sub-link" href="{{ route('back.api-clients.index') }}">
+                        <span class="sub-item">{{ __('All Clients') }}</span>
+                    </a>
+                </li>
+                <li>
+                    <a class="sub-link" href="{{ route('back.api-clients.create') }}">
+                        <span class="sub-item">{{ __('Add New Client') }}</span>
+                    </a>
+                </li>
+                <li>
+                    <a class="sub-link" href="{{ route('back.api-transactions.index') }}">
+                        <span class="sub-item">{{ __('All Transactions') }}</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </li>
+
     <li class="nav-item">
         <a data-toggle="collapse" href="#backup">
             <i class="fas fa-hdd"></i>
