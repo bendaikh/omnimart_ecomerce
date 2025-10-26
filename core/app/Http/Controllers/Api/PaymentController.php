@@ -445,7 +445,94 @@ class PaymentController extends Controller
                 'timeout_setting' => 90
             ]);
 
-            // Wrap API call in try-catch for granular error handling
+            // PRIMARY PATH: Direct HTTP call to Dodopayments (more reliable than SDK)
+            try {
+                $baseUrl = str_starts_with($apiKey, 'test_') ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
+
+                $httpPayload = [
+                    'payment_link' => true,
+                    'amount' => (int) round(((float) $request->amount) * 100),
+                    'currency' => $request->currency,
+                    'billing' => [
+                        'street' => $request->input('billing_address.address1'),
+                        'city' => $request->input('billing_address.city'),
+                        'state' => $request->input('billing_address.state', ''),
+                        'country' => $request->input('billing_address.country'),
+                        'zipcode' => $request->input('billing_address.zip')
+                    ],
+                    'customer' => [
+                        'email' => $customer['email'],
+                        'name' => $customer['name']
+                    ],
+                    'return_url' => $returnURL,
+                    'metadata' => $metadata
+                ];
+
+                $httpStart = microtime(true);
+                Log::info('Calling Dodopayments HTTP API now', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'endpoint' => $baseUrl . '/payments'
+                ]);
+
+                $httpResponse = Http::timeout(90)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type' => 'application/json',
+                        'Accept' => 'application/json'
+                    ])
+                    ->post($baseUrl . '/payments', $httpPayload);
+
+                $httpDuration = round((microtime(true) - $httpStart) * 1000, 2);
+
+                Log::info('Dodopayments HTTP API responded', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'status' => $httpResponse->status(),
+                    'duration_ms' => $httpDuration,
+                    'response_preview' => substr($httpResponse->body(), 0, 200)
+                ]);
+
+                if ($httpResponse->successful()) {
+                    $json = $httpResponse->json();
+                    $paymentId = $json['payment_id'] ?? $json['id'] ?? $json['checkout_session_id'] ?? null;
+                    $paymentUrl = $json['payment_url'] ?? $json['checkout_url'] ?? null;
+
+                    if ($paymentId) {
+                        Log::info('Dodopayments HTTP API created payment successfully', [
+                            'transaction_id' => $apiTransaction->id,
+                            'payment_id' => $paymentId,
+                            'has_payment_url' => !empty($paymentUrl)
+                        ]);
+
+                        return [
+                            'success' => true,
+                            'payment_id' => $paymentId,
+                            'payment_url' => $paymentUrl
+                        ];
+                    }
+                }
+
+                Log::warning('Dodopayments HTTP API did not return a valid payment, falling back to SDK', [
+                    'transaction_id' => $apiTransaction->id,
+                    'status' => $httpResponse->status()
+                ]);
+            } catch (\Illuminate\Http\Client\ConnectionException $ce) {
+                Log::error('Dodopayments HTTP API connection timeout - falling back to SDK', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'error' => $ce->getMessage()
+                ]);
+            } catch (\Throwable $te) {
+                Log::error('Dodopayments HTTP API threw exception - falling back to SDK', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'error' => $te->getMessage(),
+                    'class' => get_class($te)
+                ]);
+            }
+
+            // SECONDARY PATH: Wrap SDK call in try-catch for granular error handling
             $payment = null;
             $timedOut = false;
             
