@@ -461,10 +461,21 @@ class PaymentController extends Controller
                 $customerName = trim($customerFirst . ' ' . $customerLast);
                 if ($customerName === '') { $customerName = $customerEmail; }
 
+                // Build product cart for HTTP payload
+                $httpProductCart = [];
+                foreach ($request->products as $product) {
+                    $httpProductCart[] = [
+                        'name' => (string) ($product['name'] ?? 'Product'),
+                        'quantity' => (int) ($product['quantity'] ?? 1),
+                        'price' => (float) ($product['price'] ?? 0)
+                    ];
+                }
+
                 $httpPayload = [
                     'payment_link' => true,
                     'amount' => (int) round(((float) $request->amount) * 100),
                     'currency' => $request->currency,
+                    'product_cart' => $httpProductCart,
                     'billing' => [
                         'street' => $billingStreet,
                         'city' => $billingCity,
