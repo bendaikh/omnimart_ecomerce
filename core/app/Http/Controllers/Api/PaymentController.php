@@ -407,13 +407,13 @@ class PaymentController extends Controller
                 ];
             }
 
-            // Prepare metadata
+            // Prepare metadata (Dodopayments expects strings)
             $metadata = [
-                'api_client_id' => $apiClient->id,
-                'api_client_name' => $apiClient->name,
-                'api_transaction_id' => $apiTransaction->id,
-                'external_order_id' => $request->external_order_id,
-                'request_id' => $apiTransaction->request_id,
+                'api_client_id' => (string) $apiClient->id,
+                'api_client_name' => (string) $apiClient->name,
+                'api_transaction_id' => (string) $apiTransaction->id,
+                'external_order_id' => (string) $request->external_order_id,
+                'request_id' => (string) $apiTransaction->request_id,
             ];
 
             // Return URL with transaction info
