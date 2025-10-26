@@ -144,13 +144,61 @@ class PaymentController extends Controller
                 'currency' => $request->currency
             ]);
 
+            // Prevent PHP script timeout during payment processing
+            // Allow enough time for Dodopayments call (90s) + processing (30s)
+            set_time_limit(180); // 3 minutes
+            
+            Log::info('PHP execution time limit set to 180 seconds for Dodopayments call');
+
+            // Register shutdown function to catch fatal errors or timeouts
+            $shutdownHandlerRegistered = false;
+            register_shutdown_function(function() use ($requestId, $apiTransaction, &$shutdownHandlerRegistered) {
+                $error = error_get_last();
+                
+                // Check if this is a fatal error or timeout
+                if ($error && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE])) {
+                    Log::error('CRITICAL: PHP Fatal Error during Dodopayments call', [
+                        'request_id' => $requestId,
+                        'transaction_id' => $apiTransaction->id ?? null,
+                        'error_type' => $error['type'],
+                        'error_message' => $error['message'],
+                        'error_file' => $error['file'],
+                        'error_line' => $error['line']
+                    ]);
+                    
+                    // Try to mark transaction as failed
+                    try {
+                        if ($apiTransaction && method_exists($apiTransaction, 'markAsFailed')) {
+                            $apiTransaction->markAsFailed('PHP Fatal Error: ' . $error['message']);
+                        }
+                    } catch (\Exception $e) {
+                        // Ignore
+                    }
+                }
+            });
+            $shutdownHandlerRegistered = true;
+
             // Process the payment via Dodopayments
+            Log::info('About to call processDodoPayment method', [
+                'request_id' => $requestId,
+                'transaction_id' => $apiTransaction->id,
+                'timestamp' => Carbon::now()->toIso8601String()
+            ]);
+            
             $paymentResult = $this->processDodoPayment($request, $apiClient, $apiTransaction);
 
+            Log::info('processDodoPayment method returned', [
+                'request_id' => $requestId,
+                'transaction_id' => $apiTransaction->id,
+                'result_is_array' => is_array($paymentResult),
+                'has_success_key' => isset($paymentResult['success']),
+                'timestamp' => Carbon::now()->toIso8601String()
+            ]);
+            
             Log::info('Dodopayments processing completed', [
                 'request_id' => $requestId,
                 'transaction_id' => $apiTransaction->id,
-                'success' => $paymentResult['success'],
+                'success' => $paymentResult['success'] ?? 'not_set',
                 'payment_id' => $paymentResult['payment_id'] ?? null
             ]);
 
@@ -159,22 +207,48 @@ class PaymentController extends Controller
                 
                 $errorType = isset($paymentResult['error_type']) ? $paymentResult['error_type'] : 'unknown';
                 
-                Log::warning('Dodopayments failed - Sending payment failure response to API client (SenyTV)', [
+                // Determine appropriate HTTP status code based on error type
+                $httpStatusCode = 500; // Default to 500 Internal Server Error
+                $errorCode = 'PROCESSING_ERROR';
+                
+                if ($errorType === 'timeout' || stripos($paymentResult['message'], 'timeout') !== false) {
+                    $httpStatusCode = 504; // Gateway Timeout
+                    $errorCode = 'GATEWAY_TIMEOUT';
+                } elseif ($errorType === 'connection' || stripos($paymentResult['message'], 'connection') !== false) {
+                    $httpStatusCode = 503; // Service Unavailable
+                    $errorCode = 'SERVICE_UNAVAILABLE';
+                } elseif ($errorType === 'http_error') {
+                    $httpStatusCode = 502; // Bad Gateway
+                    $errorCode = 'BAD_GATEWAY';
+                }
+                
+                Log::error('CRITICAL: Dodopayments failed - Sending error response to API client (SenyTV) NOW', [
                     'request_id' => $requestId,
                     'transaction_id' => $apiTransaction->id,
                     'error_message' => $paymentResult['message'],
                     'error_type' => $errorType,
-                    'response_code' => 400,
+                    'error_code' => $errorCode,
+                    'http_status_code' => $httpStatusCode,
                     'timestamp' => Carbon::now()->toIso8601String()
                 ]);
                 
-                return response()->json([
+                $errorResponse = response()->json([
                     'success' => false,
                     'message' => $paymentResult['message'],
+                    'error_code' => $errorCode,
                     'error_type' => $errorType,
                     'request_id' => $requestId,
-                    'transaction_id' => $apiTransaction->id
-                ], 400);
+                    'transaction_id' => $apiTransaction->id,
+                    'timestamp' => Carbon::now()->toIso8601String()
+                ], $httpStatusCode);
+                
+                Log::error('RESPONSE OBJECT CREATED - About to return to API client', [
+                    'request_id' => $requestId,
+                    'status_code' => $httpStatusCode,
+                    'response_created' => true
+                ]);
+                
+                return $errorResponse;
             }
 
             // Create the order in the system
@@ -224,7 +298,16 @@ class PaymentController extends Controller
                 'response_size_bytes' => strlen(json_encode($responseData))
             ]);
 
-            return response()->json($responseData, 201);
+            $successResponse = response()->json($responseData, 201);
+            
+            Log::info('SUCCESS RESPONSE OBJECT CREATED - About to return to API client', [
+                'request_id' => $requestId,
+                'order_id' => $order->id,
+                'status_code' => 201,
+                'response_created' => true
+            ]);
+
+            return $successResponse;
 
         } catch (\Exception $e) {
             $isTimeout = (stripos($e->getMessage(), 'timeout') !== false) || 
@@ -253,7 +336,7 @@ class PaymentController extends Controller
                 'timestamp' => Carbon::now()->toIso8601String()
             ]);
 
-            return response()->json([
+            $exceptionResponse = response()->json([
                 'success' => false,
                 'message' => 'An error occurred while processing your request',
                 'error' => config('app.debug') ? $e->getMessage() : null,
@@ -261,6 +344,15 @@ class PaymentController extends Controller
                 'request_id' => $requestId ?? null,
                 'transaction_id' => isset($apiTransaction) ? $apiTransaction->id : null
             ], 500);
+            
+            Log::error('EXCEPTION RESPONSE OBJECT CREATED - About to return to API client', [
+                'request_id' => $requestId ?? 'unknown',
+                'status_code' => 500,
+                'response_created' => true,
+                'exception_class' => get_class($e)
+            ]);
+
+            return $exceptionResponse;
         }
     }
 
@@ -353,7 +445,19 @@ class PaymentController extends Controller
             ]);
 
             // Wrap API call in try-catch for granular error handling
+            $payment = null;
+            $timedOut = false;
+            
             try {
+                // Set a hard limit - if SDK doesn't respect timeout, this will catch it
+                $maxWaitTime = 95; // 95 seconds (5 seconds buffer after SDK timeout)
+                $startTime = time();
+                
+                Log::info('Attempting Dodopayments SDK call with timeout protection', [
+                    'max_wait_seconds' => $maxWaitTime,
+                    'transaction_id' => $apiTransaction->id
+                ]);
+                
                 $payment = $client->payments->create(
                     $billing,
                     $customer,
@@ -368,6 +472,27 @@ class PaymentController extends Controller
                     null, // taxID
                     $requestOptions
                 );
+                
+                // SDK call returned - log immediately
+                Log::info('Dodopayments SDK payments->create() returned', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'payment_object_type' => gettype($payment),
+                    'payment_is_null' => is_null($payment),
+                    'timestamp' => Carbon::now()->toIso8601String()
+                ]);
+                
+                // Check if we exceeded our time limit (SDK might not have thrown exception)
+                $elapsedTime = time() - $startTime;
+                if ($elapsedTime >= $maxWaitTime) {
+                    $timedOut = true;
+                    Log::error('Dodopayments SDK call completed but took too long', [
+                        'elapsed_seconds' => $elapsedTime,
+                        'max_wait_seconds' => $maxWaitTime,
+                        'transaction_id' => $apiTransaction->id
+                    ]);
+                    throw new \Exception('Dodopayments API call exceeded maximum wait time (' . $elapsedTime . 's)');
+                }
 
                 $apiCallDuration = round((microtime(true) - $apiCallStart) * 1000, 2); // milliseconds
 
@@ -392,55 +517,42 @@ class PaymentController extends Controller
                     throw new \Exception('Failed to create payment with Dodopayments - no payment ID returned');
                 }
 
-            } catch (\GuzzleHttp\Exception\ConnectException $e) {
+            } catch (\Throwable $e) {
+                // Catch ALL exceptions and errors (including fatal errors)
                 $apiCallDuration = round((microtime(true) - $apiCallStart) * 1000, 2);
+                $exceptionClass = get_class($e);
                 
-                Log::error('Dodopayments API connection timeout or network error', [
+                Log::error('CRITICAL: Dodopayments SDK call threw exception or error', [
                     'transaction_id' => $apiTransaction->id,
                     'request_id' => $apiTransaction->request_id,
-                    'error_type' => 'connection_timeout',
-                    'duration_ms' => $apiCallDuration,
-                    'timeout_setting' => 90,
-                    'error_message' => $e->getMessage(),
-                    'timestamp' => Carbon::now()->toIso8601String()
-                ]);
-                
-                throw new \Exception('Dodopayments API connection timeout after ' . $apiCallDuration . 'ms. The payment gateway did not respond in time.');
-                
-            } catch (\GuzzleHttp\Exception\RequestException $e) {
-                $apiCallDuration = round((microtime(true) - $apiCallStart) * 1000, 2);
-                
-                $statusCode = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 'no_status';
-                $responseBody = $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : 'no_response';
-                
-                Log::error('Dodopayments API request failed with HTTP error', [
-                    'transaction_id' => $apiTransaction->id,
-                    'request_id' => $apiTransaction->request_id,
-                    'error_type' => 'http_error',
-                    'duration_ms' => $apiCallDuration,
-                    'http_status' => $statusCode,
-                    'response_body' => $responseBody,
-                    'error_message' => $e->getMessage(),
-                    'timestamp' => Carbon::now()->toIso8601String()
-                ]);
-                
-                throw new \Exception('Dodopayments API error (HTTP ' . $statusCode . '): ' . $e->getMessage());
-                
-            } catch (\Exception $e) {
-                $apiCallDuration = round((microtime(true) - $apiCallStart) * 1000, 2);
-                
-                Log::error('Dodopayments API call threw exception', [
-                    'transaction_id' => $apiTransaction->id,
-                    'request_id' => $apiTransaction->request_id,
-                    'error_type' => 'general_exception',
-                    'duration_ms' => $apiCallDuration,
-                    'exception_class' => get_class($e),
+                    'exception_class' => $exceptionClass,
                     'error_message' => $e->getMessage(),
                     'error_code' => $e->getCode(),
+                    'duration_ms' => $apiCallDuration,
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
                     'timestamp' => Carbon::now()->toIso8601String()
                 ]);
                 
-                throw $e; // Re-throw to be caught by outer catch block
+                // Determine error type for better error codes
+                $isTimeout = stripos($e->getMessage(), 'timeout') !== false || 
+                             stripos($e->getMessage(), 'timed out') !== false ||
+                             stripos($exceptionClass, 'Timeout') !== false;
+                
+                $isConnection = stripos($e->getMessage(), 'connection') !== false ||
+                                stripos($e->getMessage(), 'connect') !== false ||
+                                stripos($exceptionClass, 'Connect') !== false;
+                
+                if ($isTimeout) {
+                    Log::error('Detected as TIMEOUT error', ['transaction_id' => $apiTransaction->id]);
+                    throw new \Exception('Dodopayments API connection timeout after ' . $apiCallDuration . 'ms. The payment gateway did not respond in time.');
+                } elseif ($isConnection) {
+                    Log::error('Detected as CONNECTION error', ['transaction_id' => $apiTransaction->id]);
+                    throw new \Exception('Dodopayments API connection error: ' . $e->getMessage());
+                } else {
+                    Log::error('Detected as GENERAL error', ['transaction_id' => $apiTransaction->id]);
+                    throw new \Exception('Dodopayments API error: ' . $e->getMessage());
+                }
             }
 
             return [
