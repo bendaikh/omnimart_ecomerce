@@ -463,6 +463,14 @@ class PaymentController extends Controller
 
                 // Try to create products first if not existing
                 $createdProductIds = [];
+                
+                Log::info('About to attempt product creation on Dodopayments', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'products_count' => count($request->products),
+                    'products_array_exists' => !empty($request->products)
+                ]);
+                
                 try {
                     foreach ($request->products as $index => $product) {
                         $productPayload = [
