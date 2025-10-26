@@ -463,8 +463,9 @@ class PaymentController extends Controller
 
                 // Build product cart for HTTP payload
                 $httpProductCart = [];
-                foreach ($request->products as $product) {
+                foreach ($request->products as $index => $product) {
                     $httpProductCart[] = [
+                        'product_id' => (string) ($product['id'] ?? 'api_product_' . $index),
                         'name' => (string) ($product['name'] ?? 'Product'),
                         'quantity' => (int) ($product['quantity'] ?? 1),
                         'price' => (float) ($product['price'] ?? 0)
