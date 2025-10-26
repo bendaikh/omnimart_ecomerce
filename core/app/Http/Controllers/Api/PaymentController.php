@@ -449,20 +449,32 @@ class PaymentController extends Controller
             try {
                 $baseUrl = str_starts_with($apiKey, 'test_') ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
 
+                // Sanitize payload values to avoid nulls (Dodopayments rejects null for strings)
+                $billingStreet = (string) ($request->input('billing_address.address1') ?? '');
+                $billingCity = (string) ($request->input('billing_address.city') ?? '');
+                $billingState = (string) ($request->input('billing_address.state') ?? '');
+                $billingCountry = (string) ($request->input('billing_address.country') ?? '');
+                $billingZip = (string) ($request->input('billing_address.zip') ?? '');
+                $customerEmail = (string) ($request->input('customer.email') ?? '');
+                $customerFirst = (string) ($request->input('customer.first_name') ?? '');
+                $customerLast = (string) ($request->input('customer.last_name') ?? '');
+                $customerName = trim($customerFirst . ' ' . $customerLast);
+                if ($customerName === '') { $customerName = $customerEmail; }
+
                 $httpPayload = [
                     'payment_link' => true,
                     'amount' => (int) round(((float) $request->amount) * 100),
                     'currency' => $request->currency,
                     'billing' => [
-                        'street' => $request->input('billing_address.address1'),
-                        'city' => $request->input('billing_address.city'),
-                        'state' => $request->input('billing_address.state', ''),
-                        'country' => $request->input('billing_address.country'),
-                        'zipcode' => $request->input('billing_address.zip')
+                        'street' => $billingStreet,
+                        'city' => $billingCity,
+                        'state' => $billingState,
+                        'country' => $billingCountry,
+                        'zipcode' => $billingZip
                     ],
                     'customer' => [
-                        'email' => $customer['email'],
-                        'name' => $customer['name']
+                        'email' => $customerEmail,
+                        'name' => $customerName
                     ],
                     'return_url' => $returnURL,
                     'metadata' => $metadata
