@@ -463,6 +463,7 @@ class PaymentController extends Controller
 
                 // Try to create products first if not existing
                 $createdProductIds = [];
+                $httpProductCart = []; // Initialize early to avoid undefined variable later
                 
                 Log::info('About to attempt product creation on Dodopayments', [
                     'transaction_id' => $apiTransaction->id,
@@ -479,7 +480,8 @@ class PaymentController extends Controller
                             'price' => [
                                 'currency' => $request->currency,
                                 'price' => (int) round(((float) ($product['price'] ?? 0)) * 100),
-                                'type' => 'one_time_price'
+                                'type' => 'one_time_price',
+                                'discount' => 0
                             ]
                         ];
 
@@ -524,7 +526,6 @@ class PaymentController extends Controller
 
                 // If we created products, use their IDs; otherwise use generated ones
                 if (!empty($createdProductIds)) {
-                    $httpProductCart = [];
                     foreach ($request->products as $index => $product) {
                         $httpProductCart[] = [
                             'product_id' => (string) ($createdProductIds[$index] ?? 'api_product_' . $index),
