@@ -19,6 +19,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
 use DodoPayments\Client;
 
 class PaymentController extends Controller
@@ -578,12 +579,130 @@ class PaymentController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            // ALWAYS return a response to the API client
-            return [
-                'success' => false,
-                'message' => 'Payment processing failed: ' . $e->getMessage(),
-                'error_type' => $isTimeout ? 'timeout' : 'error'
-            ];
+            // Fallback: attempt direct HTTP call to DodoPayments API to create payment link
+            try {
+                $dodoSettings = PaymentSetting::whereUniqueKeyword('dodopayments')->first();
+                $dodoData = $dodoSettings ? $dodoSettings->convertJsonData() : [];
+                $apiKey = $dodoData['api_key'] ?? null;
+                if (!$apiKey) {
+                    throw new \Exception('DodoPayments API key missing for HTTP fallback');
+                }
+
+                $baseUrl = str_starts_with($apiKey, 'test_') ? 'https://test.dodopayments.com' : 'https://live.dodopayments.com';
+
+                $amountCents = (int) round(((float) $request->amount) * 100);
+
+                $payload = [
+                    'payment_link' => true,
+                    'amount' => $amountCents,
+                    'currency' => $request->currency,
+                    'billing' => [
+                        'street' => $request->input('billing_address.address1'),
+                        'city' => $request->input('billing_address.city'),
+                        'state' => $request->input('billing_address.state', ''),
+                        'country' => $request->input('billing_address.country'),
+                        'zipcode' => $request->input('billing_address.zip'),
+                    ],
+                    'customer' => [
+                        'email' => $request->input('customer.email'),
+                        'name' => $request->input('customer.first_name') . ' ' . $request->input('customer.last_name')
+                    ],
+                    'return_url' => $returnURL ?? ($request->return_url ?? ''),
+                    'metadata' => [
+                        'api_client_id' => $apiClient->id,
+                        'api_transaction_id' => $apiTransaction->id,
+                        'external_order_id' => $request->external_order_id,
+                        'request_id' => $apiTransaction->request_id,
+                    ]
+                ];
+
+                Log::warning('Dodopayments SDK failed - attempting direct HTTP fallback', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'base_url' => $baseUrl,
+                    'endpoint' => $baseUrl . '/payments',
+                    'amount_cents' => $amountCents
+                ]);
+
+                $httpStart = microtime(true);
+                $response = Http::timeout(90)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type' => 'application/json',
+                        'Accept' => 'application/json'
+                    ])
+                    ->post($baseUrl . '/payments', $payload);
+
+                $httpDuration = round((microtime(true) - $httpStart) * 1000, 2);
+
+                Log::info('Dodopayments HTTP fallback response', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'status' => $response->status(),
+                    'duration_ms' => $httpDuration,
+                    'response_preview' => substr($response->body(), 0, 300)
+                ]);
+
+                if ($response->successful()) {
+                    $responseData = $response->json();
+                    $paymentId = $responseData['payment_id'] ?? $responseData['id'] ?? $responseData['checkout_session_id'] ?? null;
+                    $paymentUrl = $responseData['payment_url'] ?? $responseData['checkout_url'] ?? null;
+
+                    if ($paymentId) {
+                        Log::info('Dodopayments HTTP fallback created payment successfully', [
+                            'transaction_id' => $apiTransaction->id,
+                            'payment_id' => $paymentId,
+                            'has_payment_url' => !empty($paymentUrl)
+                        ]);
+
+                        return [
+                            'success' => true,
+                            'payment_id' => $paymentId,
+                            'payment_url' => $paymentUrl
+                        ];
+                    }
+                }
+
+                // If we reach here, fallback failed
+                Log::error('Dodopayments HTTP fallback failed', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Payment processing failed: Dodopayments HTTP fallback failed with status ' . $response->status(),
+                    'error_type' => 'http_error'
+                ];
+
+            } catch (\Illuminate\Http\Client\ConnectionException $he) {
+                Log::error('Dodopayments HTTP fallback connection timeout', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'error' => $he->getMessage()
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Payment processing failed: Dodopayments HTTP fallback timeout',
+                    'error_type' => 'timeout'
+                ];
+            } catch (\Throwable $he) {
+                Log::error('Dodopayments HTTP fallback threw exception', [
+                    'transaction_id' => $apiTransaction->id,
+                    'request_id' => $apiTransaction->request_id,
+                    'error' => $he->getMessage(),
+                    'class' => get_class($he)
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Payment processing failed: Dodopayments HTTP fallback error: ' . $he->getMessage(),
+                    'error_type' => 'error'
+                ];
+            }
         }
     }
 
