@@ -265,7 +265,8 @@ class PaymentController extends Controller
                     'order_id' => $order->id,
                     'transaction_number' => $order->transaction_number,
                     'payment_url' => $paymentResult['payment_url'] ?? null,
-                    'payment_id' => $paymentResult['payment_id'] ?? null
+                    'payment_id' => $paymentResult['payment_id'] ?? null,
+                    'checkout_url' => $paymentResult['checkout_url'] ?? null
                 ])
             ]);
 
@@ -279,6 +280,8 @@ class PaymentController extends Controller
                 'success' => true,
                 'message' => 'Order created successfully',
                 'request_id' => $requestId,
+                'checkout_url' => $paymentResult['payment_url'] ?? null,  // For frontend redirect
+                'status' => true,  // Frontend expects status: true for success
                 'data' => [
                     'transaction_id' => $apiTransaction->id,
                     'order_id' => $order->id,
