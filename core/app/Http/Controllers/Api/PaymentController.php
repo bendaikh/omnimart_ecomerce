@@ -461,77 +461,15 @@ class PaymentController extends Controller
                 $customerName = trim($customerFirst . ' ' . $customerLast);
                 if ($customerName === '') { $customerName = $customerEmail; }
 
-                // Try to create products first if not existing
-                $createdProductIds = [];
-                $httpProductCart = []; // Initialize early to avoid undefined variable later
-                
-                Log::info('About to attempt product creation on Dodopayments', [
-                    'transaction_id' => $apiTransaction->id,
-                    'request_id' => $apiTransaction->request_id,
-                    'products_count' => count($request->products),
-                    'products_array_exists' => !empty($request->products)
-                ]);
-                
-                try {
-                    foreach ($request->products as $index => $product) {
-                        $productPayload = [
-                            'name' => (string) ($product['name'] ?? 'Product'),
-                            'description' => (string) ($product['description'] ?? 'Order from ' . $apiClient->name),
-                            'price' => [
-                                'currency' => $request->currency,
-                                'price' => (int) round(((float) ($product['price'] ?? 0)) * 100),
-                                'type' => 'one_time_price',
-                                'discount' => 0
-                            ]
-                        ];
-
-                        Log::info('Creating product on Dodopayments', [
-                            'transaction_id' => $apiTransaction->id,
-                            'product_index' => $index,
-                            'product_name' => $productPayload['name']
-                        ]);
-
-                        $productResponse = Http::timeout(30)
-                            ->withHeaders([
-                                'Authorization' => 'Bearer ' . $apiKey,
-                                'Content-Type' => 'application/json',
-                                'Accept' => 'application/json'
-                            ])
-                            ->post($baseUrl . '/products', $productPayload);
-
-                        if ($productResponse->successful()) {
-                            $productData = $productResponse->json();
-                            $productId = $productData['id'] ?? null;
-                            if ($productId) {
-                                $createdProductIds[] = $productId;
-                                Log::info('Product created successfully', [
-                                    'transaction_id' => $apiTransaction->id,
-                                    'product_id' => $productId
-                                ]);
-                            }
-                        } else {
-                            Log::warning('Failed to create product on Dodopayments', [
-                                'transaction_id' => $apiTransaction->id,
-                                'status' => $productResponse->status(),
-                                'response' => substr($productResponse->body(), 0, 200)
-                            ]);
-                        }
-                    }
-                } catch (\Throwable $pe) {
-                    Log::warning('Exception creating products, will attempt payment without pre-created products', [
-                        'transaction_id' => $apiTransaction->id,
-                        'error' => $pe->getMessage()
-                    ]);
-                }
-
-                // If we created products, use their IDs; otherwise use generated ones
-                if (!empty($createdProductIds)) {
-                    foreach ($request->products as $index => $product) {
-                        $httpProductCart[] = [
-                            'product_id' => (string) ($createdProductIds[$index] ?? 'api_product_' . $index),
-                            'quantity' => (int) ($product['quantity'] ?? 1)
-                        ];
-                    }
+                // Build product cart directly (no need to pre-create products)
+                $httpProductCart = [];
+                foreach ($request->products as $product) {
+                    $httpProductCart[] = [
+                        'currency' => $request->currency,
+                        'name' => (string) ($product['name'] ?? 'Product'),
+                        'quantity' => (int) ($product['quantity'] ?? 1),
+                        'price' => (float) ($product['price'] ?? 0)
+                    ];
                 }
 
                 $httpPayload = [
@@ -558,7 +496,8 @@ class PaymentController extends Controller
                 Log::info('Calling Dodopayments HTTP API now', [
                     'transaction_id' => $apiTransaction->id,
                     'request_id' => $apiTransaction->request_id,
-                    'endpoint' => $baseUrl . '/payments'
+                    'endpoint' => $baseUrl . '/payments',
+                    'products_count' => count($httpProductCart)
                 ]);
 
                 $httpResponse = Http::timeout(90)
@@ -576,7 +515,7 @@ class PaymentController extends Controller
                     'request_id' => $apiTransaction->request_id,
                     'status' => $httpResponse->status(),
                     'duration_ms' => $httpDuration,
-                    'response_preview' => substr($httpResponse->body(), 0, 200)
+                    'response_preview' => substr($httpResponse->body(), 0, 300)
                 ]);
 
                 if ($httpResponse->successful()) {
