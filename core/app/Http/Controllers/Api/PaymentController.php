@@ -505,7 +505,7 @@ class PaymentController extends Controller
 
                         if ($productResponse->successful()) {
                             $productData = $productResponse->json();
-                            $productId = $productData['id'] ?? null;
+                            $productId = $productData['product_id'] ?? null;
                             
                             Log::info('Product response parsed', [
                                 'transaction_id' => $apiTransaction->id,
