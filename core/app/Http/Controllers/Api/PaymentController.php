@@ -461,15 +461,83 @@ class PaymentController extends Controller
                 $customerName = trim($customerFirst . ' ' . $customerLast);
                 if ($customerName === '') { $customerName = $customerEmail; }
 
-                // Build product cart directly (no need to pre-create products)
+                // Create products first on Dodopayments (required)
+                $createdProductIds = [];
+                Log::info('Creating products on Dodopayments', [
+                    'transaction_id' => $apiTransaction->id,
+                    'products_count' => count($request->products)
+                ]);
+                
+                try {
+                    foreach ($request->products as $index => $product) {
+                        $productPayload = [
+                            'name' => (string) ($product['name'] ?? 'Product'),
+                            'description' => (string) ($product['description'] ?? 'Order from ' . $apiClient->name),
+                            'price' => [
+                                'currency' => $request->currency,
+                                'price' => (int) round(((float) ($product['price'] ?? 0)) * 100),
+                                'type' => 'one_time_price',
+                                'discount' => 0,
+                                'purchasing_power_parity' => true
+                            ]
+                        ];
+
+                        Log::info('Creating product', [
+                            'transaction_id' => $apiTransaction->id,
+                            'product_index' => $index,
+                            'product_name' => $productPayload['name']
+                        ]);
+
+                        $productResponse = Http::timeout(30)
+                            ->withHeaders([
+                                'Authorization' => 'Bearer ' . $apiKey,
+                                'Content-Type' => 'application/json',
+                                'Accept' => 'application/json'
+                            ])
+                            ->post($baseUrl . '/products', $productPayload);
+
+                        if ($productResponse->successful()) {
+                            $productData = $productResponse->json();
+                            $productId = $productData['id'] ?? null;
+                            if ($productId) {
+                                $createdProductIds[] = $productId;
+                                Log::info('Product created', [
+                                    'transaction_id' => $apiTransaction->id,
+                                    'product_id' => $productId
+                                ]);
+                            }
+                        } else {
+                            Log::warning('Product creation failed', [
+                                'transaction_id' => $apiTransaction->id,
+                                'status' => $productResponse->status(),
+                                'response' => substr($productResponse->body(), 0, 200)
+                            ]);
+                        }
+                    }
+                } catch (\Throwable $pe) {
+                    Log::error('Exception during product creation', [
+                        'transaction_id' => $apiTransaction->id,
+                        'error' => $pe->getMessage()
+                    ]);
+                }
+
+                if (empty($createdProductIds)) {
+                    Log::error('No products were created, cannot proceed with payment', [
+                        'transaction_id' => $apiTransaction->id
+                    ]);
+                    return [
+                        'success' => false,
+                        'message' => 'Failed to create products on Dodopayments',
+                        'error_type' => 'error'
+                    ];
+                }
+
+                // Build product cart with created product IDs
                 $httpProductCart = [];
                 foreach ($request->products as $index => $product) {
                     $httpProductCart[] = [
-                        'product_id' => (string) ($product['id'] ?? 'api_product_' . $index),
-                        'currency' => $request->currency,
-                        'name' => (string) ($product['name'] ?? 'Product'),
-                        'quantity' => (int) ($product['quantity'] ?? 1),
-                        'price' => (float) ($product['price'] ?? 0)
+                        'product_id' => (string) ($createdProductIds[$index] ?? null),
+                        'quantity' => (int) ($product['quantity'] ?? 1)
                     ];
                 }
 
