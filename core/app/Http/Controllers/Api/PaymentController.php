@@ -610,7 +610,7 @@ class PaymentController extends Controller
                 if ($httpResponse->successful()) {
                     $json = $httpResponse->json();
                     $paymentId = $json['payment_id'] ?? $json['id'] ?? $json['checkout_session_id'] ?? null;
-                    $paymentUrl = $json['payment_url'] ?? $json['checkout_url'] ?? null;
+                    $paymentUrl = $json['payment_link'] ?? $json['payment_url'] ?? $json['checkout_url'] ?? null;
 
                     if ($paymentId) {
                         Log::info('Dodopayments HTTP API created payment successfully', [
