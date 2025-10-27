@@ -497,21 +497,40 @@ class PaymentController extends Controller
                             ])
                             ->post($baseUrl . '/products', $productPayload);
 
+                        Log::info('Product response received', [
+                            'transaction_id' => $apiTransaction->id,
+                            'status' => $productResponse->status(),
+                            'response_preview' => substr($productResponse->body(), 0, 500)
+                        ]);
+
                         if ($productResponse->successful()) {
                             $productData = $productResponse->json();
                             $productId = $productData['id'] ?? null;
+                            
+                            Log::info('Product response parsed', [
+                                'transaction_id' => $apiTransaction->id,
+                                'product_data_keys' => array_keys($productData),
+                                'product_id' => $productId,
+                                'full_response' => json_encode($productData)
+                            ]);
+                            
                             if ($productId) {
                                 $createdProductIds[] = $productId;
                                 Log::info('Product created', [
                                     'transaction_id' => $apiTransaction->id,
                                     'product_id' => $productId
                                 ]);
+                            } else {
+                                Log::warning('Product response has no id field', [
+                                    'transaction_id' => $apiTransaction->id,
+                                    'response_keys' => array_keys($productData)
+                                ]);
                             }
                         } else {
                             Log::warning('Product creation failed', [
                                 'transaction_id' => $apiTransaction->id,
                                 'status' => $productResponse->status(),
-                                'response' => substr($productResponse->body(), 0, 200)
+                                'response' => substr($productResponse->body(), 0, 500)
                             ]);
                         }
                     }
