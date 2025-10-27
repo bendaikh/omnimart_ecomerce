@@ -463,8 +463,9 @@ class PaymentController extends Controller
 
                 // Build product cart directly (no need to pre-create products)
                 $httpProductCart = [];
-                foreach ($request->products as $product) {
+                foreach ($request->products as $index => $product) {
                     $httpProductCart[] = [
+                        'product_id' => (string) ($product['id'] ?? 'api_product_' . $index),
                         'currency' => $request->currency,
                         'name' => (string) ($product['name'] ?? 'Product'),
                         'quantity' => (int) ($product['quantity'] ?? 1),
