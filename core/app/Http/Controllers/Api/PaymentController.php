@@ -478,9 +478,9 @@ class PaymentController extends Controller
                                 'price' => (int) round(((float) ($product['price'] ?? 0)) * 100),
                                 'type' => 'one_time_price',
                                 'discount' => 0,
-                                'purchasing_power_parity' => true,
-                                'tax_category' => 'digital_products'
-                            ]
+                                'purchasing_power_parity' => true
+                            ],
+                            'tax_category' => 'digital_products'
                         ];
 
                         Log::info('Creating product', [
