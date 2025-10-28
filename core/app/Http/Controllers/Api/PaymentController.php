@@ -475,7 +475,7 @@ class PaymentController extends Controller
                     foreach ($request->products as $index => $product) {
                         $productPayload = [
                             'name' => (string) ($product['name'] ?? 'Product'),
-                            'description' => (string) ($product['description'] ?? 'Order from ' . $apiClient->name),
+                            'description' => (string) ($product['description'] ?? 'Order from senypro'),
                             'price' => [
                                 'currency' => $request->currency,
                                 'price' => (int) round(((float) ($product['price'] ?? 0)) * 100),
