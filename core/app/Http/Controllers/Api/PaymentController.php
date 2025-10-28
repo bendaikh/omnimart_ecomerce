@@ -127,12 +127,12 @@ class PaymentController extends Controller
                 'external_order_id' => $request->external_order_id,
                 'request_id' => $requestId,
                 'status' => ApiTransaction::STATUS_PENDING,
-                'request_data' => json_encode($request->except(['api_client'])),
+                'request_data' => $request->except(['api_client']),
                 'amount' => $request->amount,
                 'currency' => $request->currency,
                 'request_ip' => $request->ip(),
-                'customer_info' => json_encode($request->customer),
-                'product_info' => json_encode($request->products),
+                'customer_info' => $request->customer,
+                'product_info' => $request->products,
             ]);
 
             // Mark as processing
@@ -261,13 +261,13 @@ class PaymentController extends Controller
 
             // Update response data
             $apiTransaction->update([
-                'response_data' => json_encode([
+                'response_data' => [
                     'order_id' => $order->id,
                     'transaction_number' => $order->transaction_number,
                     'payment_url' => $paymentResult['payment_url'] ?? null,
                     'payment_id' => $paymentResult['payment_id'] ?? null,
                     'checkout_url' => $paymentResult['checkout_url'] ?? null
-                ])
+                ]
             ]);
 
             Log::info('API Payment Processed Successfully', [
@@ -942,6 +942,21 @@ class PaymentController extends Controller
             ]
         );
 
+        // Prepare shipping info with proper field names
+        $shippingAddress = $request->input('shipping_address', $request->billing_address);
+        $shippingInfo = [
+            'ship_first_name' => $request->input('customer.first_name'),
+            'ship_last_name' => $request->input('customer.last_name'),
+            'ship_email' => $request->input('customer.email'),
+            'ship_phone' => $request->input('customer.phone', ''),
+            'ship_address1' => $shippingAddress['address1'] ?? '',
+            'ship_address2' => $shippingAddress['address2'] ?? '',
+            'ship_city' => $shippingAddress['city'] ?? '',
+            'ship_state' => $shippingAddress['state'] ?? '',
+            'ship_country' => $shippingAddress['country'] ?? '',
+            'ship_zip' => $shippingAddress['zip'] ?? '',
+        ];
+
         // Create order
         $orderData = [
             'user_id' => 0, // API orders are not linked to users
@@ -955,7 +970,7 @@ class PaymentController extends Controller
             'transaction_number' => Str::random(10),
             'order_status' => 'Pending',
             'payment_status' => 'Unpaid',
-            'shipping_info' => json_encode($request->input('shipping_address', [])),
+            'shipping_info' => json_encode($shippingInfo),
             'billing_info' => json_encode($billingInfo),
             'currency_sign' => '$',
             'currency_value' => 1,
